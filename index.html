@@ -1,0 +1,3024 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>給与計算・年末調整システム（令和8年分）</title>
+
+<!-- ==== PWA対応 ==== -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#173a5e">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- iOS Safari用（Androidと表記が異なるため両方指定） -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="給与計算">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.3/full/pyodide.js"></script>
+<style>
+  :root{
+    --navy:#173a5e;
+    --navy-dark:#0f2843;
+    --accent:#2f6fb3;
+    --accent-soft:#e7f0fa;
+    --paper:#fafbfc;
+    --line:#d8dee6;
+    --ink:#1c2530;
+    --ink-soft:#5b6b7d;
+    --input-bg:#fff8dd;
+    --input-border:#e4c96a;
+    --good:#1e7d4f;
+    --warn:#b3401f;
+    --radius:6px;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Hiragino Sans","Yu Gothic",Meiryo,"Noto Sans JP",sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    display:flex;
+    min-height:100vh;
+    font-size:14px;
+  }
+  /* ---------- Sidebar ---------- */
+  #sidebar{
+    width:236px;
+    flex:0 0 236px;
+    background:linear-gradient(180deg,var(--navy) 0%,var(--navy-dark) 100%);
+    color:#dce7f2;
+    padding:20px 0;
+    position:sticky;
+    top:0;
+    height:100vh;
+    overflow-y:auto;
+  }
+  #sidebar .brand{
+    padding:0 20px 18px 20px;
+    border-bottom:1px solid rgba(255,255,255,.12);
+    margin-bottom:10px;
+  }
+  #sidebar .brand h1{
+    font-size:15px;
+    line-height:1.5;
+    margin:0 0 4px 0;
+    color:#fff;
+    font-weight:700;
+  }
+  #sidebar .brand .yr{
+    font-size:11px;
+    color:#9db6cf;
+    letter-spacing:.04em;
+  }
+  .profilebox{
+    padding:0 20px 16px 20px;
+    border-bottom:1px solid rgba(255,255,255,.12);
+    margin-bottom:6px;
+  }
+  .profileselect{
+    width:100%; padding:7px 8px; border-radius:5px; border:1px solid rgba(255,255,255,.25);
+    background:#0f2843; color:#fff; font-size:12.5px; margin-bottom:6px;
+  }
+  .profilebtnrow{display:flex; gap:5px;}
+  .profilebtn{
+    flex:1; padding:5px 4px; border-radius:4px; border:1px solid rgba(255,255,255,.25);
+    background:transparent; color:#dce7f2; font-size:11px; cursor:pointer;
+  }
+  .profilebtn:hover{background:rgba(255,255,255,.1);}
+  .profilebtn.danger{border-color:rgba(220,120,100,.5); color:#e3a08f;}
+  .profilebtn.danger:hover{background:rgba(163,64,31,.3);}
+  .navgroup{margin:14px 0;}
+  .navgroup .label{
+    font-size:10.5px;
+    color:#7d97b2;
+    padding:4px 20px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+  .navitem{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:9px 20px;
+    color:#cfe0ef;
+    cursor:pointer;
+    border-left:3px solid transparent;
+    font-size:13.5px;
+    transition:background .12s, color .12s;
+  }
+  .navitem:hover{background:rgba(255,255,255,.06); color:#fff;}
+  .navitem.active{
+    background:rgba(255,255,255,.10);
+    border-left-color:#5b9bdb;
+    color:#fff;
+    font-weight:600;
+  }
+  .navitem .dot{
+    width:6px;height:6px;border-radius:50%;
+    background:#5b9bdb;flex:0 0 auto;opacity:.85;
+  }
+  /* ---------- Main ---------- */
+  #main{flex:1; min-width:0; padding:28px 34px 60px 34px;}
+  .pagehead{margin-bottom:18px;}
+  .pagehead h2{margin:0 0 4px 0; font-size:20px; color:var(--navy);}
+  .pagehead p{margin:0; color:var(--ink-soft); font-size:13px; max-width:900px; line-height:1.7;}
+  .card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:18px 20px;
+    margin-bottom:18px;
+  }
+  .card h3{
+    margin:0 0 14px 0;
+    font-size:14px;
+    color:var(--navy);
+    border-bottom:2px solid var(--accent-soft);
+    padding-bottom:8px;
+  }
+  .note{
+    background:var(--accent-soft);
+    border:1px solid #c9dcf0;
+    border-radius:var(--radius);
+    padding:10px 14px;
+    font-size:12.5px;
+    color:#28527f;
+    line-height:1.7;
+    margin-bottom:16px;
+  }
+  .note.warn{background:#fdf1ec; border-color:#f0c7b5; color:var(--warn);}
+  .field-row{display:flex; flex-wrap:wrap; gap:14px 22px; margin-bottom:8px;}
+  .field{display:flex; flex-direction:column; gap:4px; min-width:170px;}
+  .field.wide{min-width:320px; flex:1;}
+  .field label{font-size:11.5px; color:var(--ink-soft); font-weight:600;}
+  input[type=text],input[type=number],input[type=date],select,textarea{
+    font-family:inherit;
+    font-size:13.5px;
+    padding:6px 8px;
+    border:1px solid var(--input-border);
+    border-radius:4px;
+    background:var(--input-bg);
+    color:#3a2f0b;
+  }
+  select.readonly-select, input[readonly]{
+    background:#f0f2f5; color:#556; border-color:var(--line);
+  }
+  input[type=checkbox]{width:16px; height:16px;}
+  /* 日付入力（生年月日・入社日・賞与支給年月日）：
+     ネイティブのdate入力は環境（特にWindows）によって曜日が付いて表示され、
+     消せないことがあるため、実際に見せるテキストは自前でフォーマットしたspan/inputにし、
+     ネイティブのdate入力は透明にしてカレンダーを開くためだけに重ねて使う。 */
+  .date-input-wrap{position:relative; display:inline-block; width:100%; min-width:150px;}
+  .date-input-wrap .date-display{
+    width:100%; min-width:150px; box-sizing:border-box; cursor:pointer;
+    padding-right:24px;
+    text-align:left !important;
+    background:var(--input-bg) !important; color:#3a2f0b !important; border-color:var(--input-border) !important;
+  }
+  .date-input-wrap .date-icon{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    font-size:13px; line-height:1; cursor:pointer; z-index:3; user-select:none;
+  }
+  .date-input-wrap input[type=date]{
+    position:absolute; inset:0; width:100%; height:100%; z-index:2;
+    opacity:0; border:none; padding:0; margin:0; pointer-events:none;
+  }
+  table{border-collapse:collapse; width:100%; font-size:12.5px;}
+  .tablewrap table:not(.datatable) th,.tablewrap table:not(.datatable) td{
+    border:1px solid var(--line); padding:5px 7px; text-align:right; white-space:nowrap;
+  }
+  .tablewrap table:not(.datatable) th{background:var(--navy); color:#fff; font-size:11.5px;}
+  .tablewrap table:not(.datatable) td:first-child,.tablewrap table:not(.datatable) th:first-child{text-align:left;}
+  table.datatable{background:#fff;}
+  table.datatable th{
+    background:var(--navy);
+    color:#fff;
+    font-weight:600;
+    padding:7px 6px;
+    text-align:center;
+    font-size:11.5px;
+    white-space:nowrap;
+    position:sticky; top:0; z-index:2;
+  }
+  table.datatable td{
+    padding:5px 6px;
+    border-bottom:1px solid #eef1f4;
+    text-align:right;
+    white-space:nowrap;
+  }
+  table.datatable td.tleft{text-align:left;}
+  table.datatable tr:hover td{background:#f6f9fc;}
+  table.datatable td input[type=number],table.datatable td input[type=text]{
+    width:100%; min-width:70px; text-align:right; padding:4px 5px; font-size:12.5px;
+  }
+  .tablewrap{overflow:auto; max-height:70vh; border:1px solid var(--line); border-radius:var(--radius);}
+  .row-total td{background:#eef3f9; font-weight:700; border-top:2px solid var(--accent);}
+  table.datatable tr.row-total:hover td{background:#eef3f9;}
+  .row-total.grand-total td{
+    background:#173a5e; color:#fff; font-size:13.5px;
+    border-top:3px double #000; border-bottom:1px solid #000;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact;
+  }
+  table.datatable tr.row-total.grand-total:hover td{
+    background:#173a5e; color:#fff;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact;
+  }
+  .btn{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:8px 16px;
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    border-radius:5px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .btn:hover{background:#255c96;}
+  .btn.secondary{background:#fff; color:var(--accent); border:1px solid var(--accent);}
+  .btn.secondary:hover{background:var(--accent-soft);}
+  .btn.danger{background:#fff; color:var(--warn); border:1px solid var(--warn);}
+  .btn.danger:hover{background:#fdf1ec;}
+  .btn.small{padding:4px 10px; font-size:12px;}
+  .toolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;}
+  .toolbar .spacer{flex:1;}
+  .pill{
+    display:inline-block; padding:2px 9px; border-radius:20px;
+    font-size:11px; font-weight:700;
+  }
+  .pill.kou{background:#e4f3ea; color:var(--good);}
+  .pill.otsu{background:#fdeee0; color:#a35414;}
+  .tag-warn{color:var(--warn); font-weight:700;}
+  .flash{
+    position:fixed; top:18px; right:24px; z-index:999;
+    background:var(--navy); color:#fff; padding:10px 18px; border-radius:5px;
+    font-size:13px; box-shadow:0 4px 14px rgba(0,0,0,.2);
+    opacity:0; transform:translateY(-8px);
+    transition:opacity .25s, transform .25s;
+    pointer-events:none;
+  }
+  .flash.show{opacity:1; transform:translateY(0);}
+  .kv{display:grid; grid-template-columns:150px 1fr; gap:6px 14px; font-size:13px;}
+  .kv div.k{color:var(--ink-soft);}
+  .footer-note{font-size:11.5px; color:#8b98a6; margin-top:26px; line-height:1.8;}
+
+  /* ---------- Print slip ---------- */
+  #printSlip{display:none;}
+  .slip{
+    width:720px; margin:0 auto; background:#fff; border:1px solid #999; padding:34px 30px 26px;
+  }
+  .slip h2{text-align:center; margin:0 0 20px 0; letter-spacing:.1em; font-size:19px; color:#000; font-weight:800;}
+  .slip .slip-head{display:flex; justify-content:space-between; font-size:13.5px; margin-bottom:16px; color:#000; font-weight:700; line-height:1.6;}
+  .slip table{width:100%; border-collapse:collapse; margin-bottom:8px;}
+  .slip th,.slip td{border:1px solid #999; padding:6px 8px; font-size:13.5px; color:#000; font-weight:700;}
+  .slip th{background:#eef3f9; text-align:left; width:45%;}
+  .slip td{text-align:right;}
+  .slip .netpay{
+    background:var(--navy); color:#fff; font-size:16px; font-weight:800;
+    border-top:3px double #000; border-bottom:2px solid #000;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact;
+  }
+  .slip .netpay th{
+    background:var(--navy); color:#fff;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact;
+  }
+  .slip .netpay td{
+    color:#fff; font-weight:800;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact;
+  }
+
+
+  /* 源泉徴収票 */
+  .gensen{width:100%; max-width:760px; margin:0 auto; font-size:12.5px; color:#111;}
+  .gensen-title{text-align:center; font-size:17px; font-weight:700; margin-bottom:10px; letter-spacing:2px;}
+  .gensen-table{width:100%; border-collapse:collapse; margin-bottom:8px;}
+  .gensen-table td{border:1px solid #333; padding:6px 8px; vertical-align:top;}
+  .gensen-table td.lbl{background:#f3f5f8; font-weight:700; font-size:11.5px;}
+  .gensen-table td.num{text-align:right; font-variant-numeric:tabular-nums;}
+
+  @media print{
+    body *{visibility:hidden;}
+    /* 単票印刷（給与明細・賞与明細の「印刷」ボタン）は、印刷実行時にbodyへ
+       付与される printing-single-slip クラスがある時だけ表示する。
+       これを付けないと、直前に表示していた明細が #printSlip に残ったままになり、
+       賃金台帳・個人別賃金台帳の印刷時に重なって表示されてしまう。 */
+    body.printing-single-slip #printSlip, body.printing-single-slip #printSlip *{visibility:visible;}
+    body.printing-single-slip #printSlip{display:block; position:absolute; left:0; top:0; width:100%;}
+    #ledgerPrintArea, #ledgerPrintArea *{visibility:visible;}
+    body.printing-ledger #ledgerPrintArea{display:block; position:absolute; left:0; top:0; width:100%;}
+    #printSlipBulk, #printSlipBulk *{visibility:visible;}
+    body.printing-bulk-slip #printSlipBulk{display:block; position:absolute; left:0; top:0; width:100%;}
+    @page{ size:A4; margin:10mm; }
+  }
+  #dynamicPageStyle{}
+  #ledgerPrintArea{display:none;}
+  #printSlipBulk{display:none;}
+  .slip-page{
+    page-break-after:always;
+    height:277mm;
+    box-sizing:border-box;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr 1fr;
+  }
+  .slip-page:last-child{page-break-after:auto;}
+  .slip-page .slip-cell{
+    border:1px dashed #999;
+    box-sizing:border-box;
+    overflow:hidden;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:4mm;
+  }
+  .slip-page .slip{width:100%; margin:0; height:auto; overflow:hidden; padding:8px 14px;}
+  .slip-compact h2{font-size:15.5px; margin:2px 0 8px 0; font-weight:800;}
+  .slip-compact .slip-head{font-size:12px; margin-bottom:8px;}
+  .slip-compact table th,.slip-compact table td{padding:3.5px 8px; font-size:12px; font-weight:700; color:#000;}
+  .slip-compact .netpay{font-size:13.5px;}
+  #ledgerPrintArea{
+    width:100%; box-sizing:border-box; font-size:9px;
+  }
+  #ledgerPrintArea table{
+    width:100%; table-layout:fixed; border-collapse:collapse; font-size:9px;
+  }
+  #ledgerPrintArea th,#ledgerPrintArea td{
+    border:1px solid #888; padding:2px 3px; white-space:nowrap; overflow-wrap:normal; word-break:normal;
+  }
+  /* 賃金台帳（氏名列）：折り返さず固定幅を確保 */
+  #ledgerPrintArea table:not(.datatable) th:first-child, #ledgerPrintArea table:not(.datatable) td:first-child{
+    width:82px; white-space:nowrap; word-break:keep-all; overflow-wrap:normal;
+  }
+  /* 個人別賃金台帳（区分列）：【上期小計】のような長いラベルは折り返す。金額列は対象外なので数字は改行されない */
+  #ledgerPrintArea table.datatable th:first-child, #ledgerPrintArea table.datatable td:first-child{
+    white-space:normal; overflow-wrap:break-word; word-break:break-all;
+  }
+  #ledgerPrintArea th{background:#eef3f9; line-height:1.25; color:#000; font-weight:700;}
+  #ledgerPrintArea td{text-align:right;}
+  #ledgerPrintArea td:first-child, #ledgerPrintArea th:first-child{text-align:left;}
+  #ledgerPrintArea h2, #ledgerPrintArea h3{font-size:14px; margin:0 0 6px 0; color:#000; font-weight:800;}
+  /* 小計・合計行（.row-total）以外の値・名称セルを黒字＋太字にして視認性を上げる */
+  #ledgerPrintArea tr:not(.row-total) td{color:#000; font-weight:700;}
+
+  ::-webkit-scrollbar{width:10px; height:10px;}
+  ::-webkit-scrollbar-thumb{background:#c3ccd6; border-radius:6px;}
+</style>
+<style id="dynamicPageStyle"></style>
+</head>
+<body>
+
+<div id="sidebar"></div>
+<div id="main"></div>
+<div id="flash" class="flash"></div>
+<div id="printSlip"></div>
+<div id="printSlipBulk"></div>
+<div id="ledgerPrintArea"></div>
+
+<script>
+// ==== calc.js ====
+// ============================================================================
+// calc.js — 給与計算エンジン（令和8年分）
+// Excel版で検証済みのロジックをそのまま移植しています。
+// 出典は各関数のコメントを参照してください。
+// ============================================================================
+
+const Calc = (function () {
+
+  // ---- 共通ユーティリティ ----
+  function roundDown(x, digits) {
+    const f = Math.pow(10, digits);
+    return Math.floor(x * f + 1e-9) / f;
+  }
+  function mround(x, multiple) {
+    if (multiple === 0) return 0;
+    return Math.round(x / multiple) * multiple;
+  }
+
+  // ==========================================================================
+  // 【月次・甲欄】第1表：給与所得控除額（社会保険料等控除後の給与等の金額Aに応じる）
+  // 出典：国税庁「月額表の甲欄を適用する給与等に対する税額の電算機計算の特例について
+  //       （令和8年分以降）」
+  // ==========================================================================
+  function kyuyoKoujoGetsu(A) {
+    if (A < 158334) return 54167;
+    if (A < 300000) return A * 0.30 + 6667;
+    if (A < 550000) return A * 0.20 + 36667;
+    if (A < 708331) return A * 0.10 + 91667;
+    return 162500;
+  }
+
+  // 第2表：配偶者控除等の額／扶養控除等の額（1人あたり月額）
+  const HAIGUSHA_KOUJO_GETSU = 31667;
+  const FUYOU_KOUJO_GETSU = 31667;
+
+  // 第3表：基礎控除額（月次用・Aに応じる）
+  function kisoKoujoGetsu(A) {
+    if (A <= 2120833) return 48334;
+    if (A <= 2162499) return 40000;
+    if (A <= 2204166) return 26667;
+    if (A <= 2245833) return 13334;
+    return 0;
+  }
+
+  // 第4表：税額速算表（その月の課税給与所得金額Bに応じる）
+  function zeigakuGetsu(B) {
+    let raw;
+    if (B <= 162500) raw = B * 0.05105;
+    else if (B <= 275000) raw = B * 0.10210 - 8296;
+    else if (B <= 579166) raw = B * 0.20420 - 36374;
+    else if (B <= 750000) raw = B * 0.23483 - 54113;
+    else if (B <= 1500000) raw = B * 0.33693 - 130688;
+    else if (B <= 3333333) raw = B * 0.40840 - 237893;
+    else raw = B * 0.45945 - 408061;
+    return mround(Math.max(0, raw), 10);
+  }
+
+  /**
+   * 月次給与の甲欄源泉徴収税額を計算する。
+   * @param {number} A 社会保険料等控除後の給与等の金額
+   * @param {boolean} hasSpouse 源泉控除対象配偶者の有無
+   * @param {number} dependents 源泉控除対象親族の人数（障害者等加算含む）
+   */
+  function kouranMonthlyTax(A, hasSpouse, dependents) {
+    const kyuyoKoujo = kyuyoKoujoGetsu(A);
+    const haiguKoujo = hasSpouse ? HAIGUSHA_KOUJO_GETSU : 0;
+    const fuyouKoujo = dependents * FUYOU_KOUJO_GETSU;
+    const kisoKoujo = kisoKoujoGetsu(A);
+    const B = Math.max(0, A - (kyuyoKoujo + haiguKoujo + fuyouKoujo + kisoKoujo));
+    const tax = zeigakuGetsu(B);
+    return { kyuyoKoujo, haiguKoujo, fuyouKoujo, kisoKoujo, B, tax };
+  }
+
+  // ==========================================================================
+  // 【月次・乙欄】出典：国税庁「月額表の乙欄を適用する給与等に対する税額の電算機計算に
+  // ついて（令和8年分以降）」。従たる給与についての扶養控除等申告書の提出がないケースのみ対応。
+  // ==========================================================================
+  // 乙欄・第3表：税額の算式（復興特別所得税は含まない）
+  function otsuDai3Hyou(taxable) {
+    if (taxable <= 162500) return taxable * 0.05;
+    if (taxable <= 275000) return taxable * 0.10 - 8125;
+    if (taxable <= 579166) return taxable * 0.20 - 35625;
+    if (taxable <= 750000) return taxable * 0.23 - 53000;
+    if (taxable <= 1500000) return taxable * 0.33 - 128000;
+    return taxable * 0.40 - 233000;
+  }
+
+  function otsuranMonthlyTax(A) {
+    if (A < 105000) {
+      return roundDown(A * 0.03063, 0);
+    }
+    if (A > 740000 && A < 1710000) {
+      return roundDown(259200 + (A - 740000) * 0.4084, 0);
+    }
+    if (A >= 1710000) {
+      return roundDown(655400 + (A - 1710000) * 0.45945, 0);
+    }
+    // 105,000円 〜 740,000円：計算基準額方式
+    let step, minVal;
+    if (A <= 220999) { step = 2000; minVal = 105000; }
+    else { step = 3000; minVal = 221000; }
+    const quotient = Math.floor((A - minVal) / step);
+    const kijunGaku = minVal + step * quotient;
+
+    const scaledA = kijunGaku * 2.5;
+    const scaledB = kijunGaku * 1.5;
+    const kyuyoA = kyuyoKoujoGetsu(scaledA);
+    const kyuyoB = kyuyoKoujoGetsu(scaledB);
+    const kisoA = kisoKoujoGetsu(scaledA);
+    const kisoB = kisoKoujoGetsu(scaledB);
+    const taxableA = scaledA - kyuyoA - kisoA;
+    const taxableB = scaledB - kyuyoB - kisoB;
+    const Aval = roundDown(Math.max(0, otsuDai3Hyou(taxableA)), 0);
+    const Bval = roundDown(Math.max(0, otsuDai3Hyou(taxableB)), 0);
+    const C = mround(Aval - Bval, 100);
+    return mround(C * 1.021, 100);
+  }
+
+  // ==========================================================================
+  // 【賞与】賞与に対する源泉徴収税額の算出率の表（令和8年分・甲欄）
+  // 出典：国税庁「賞与に対する源泉徴収税額の算出率の表（令和8年分）」
+  // 各行: [率(%), 0人下限,1人下限,...,7人以上下限]（単位：円。国税庁資料の千円単位を円に変換）
+  // ==========================================================================
+  const BONUS_RATE_TABLE = [
+    [0.000, [0, 0, 0, 0, 0, 0, 0, 0]],
+    [2.042, [82000, 107000, 143000, 181000, 218000, 251000, 284000, 317000]],
+    [4.084, [94000, 250000, 276000, 300000, 300000, 304000, 343000, 383000]],
+    [6.126, [260000, 289000, 321000, 354000, 387000, 412000, 438000, 463000]],
+    [8.168, [309000, 346000, 377000, 405000, 431000, 457000, 483000, 508000]],
+    [10.210, [342000, 373000, 400000, 424000, 452000, 479000, 505000, 529000]],
+    [12.252, [372000, 401000, 426000, 452000, 477000, 503000, 527000, 552000]],
+    [14.294, [402000, 430000, 457000, 484000, 509000, 531000, 553000, 578000]],
+    [16.336, [433000, 463000, 492000, 517000, 540000, 564000, 589000, 614000]],
+    [18.378, [520000, 520000, 525000, 550000, 577000, 604000, 630000, 657000]],
+    [20.420, [605000, 621000, 636000, 651000, 666000, 681000, 697000, 708000]],
+    [22.462, [684000, 705000, 728000, 751000, 774000, 798000, 821000, 845000]],
+    [24.504, [715000, 739000, 764000, 788000, 813000, 838000, 862000, 887000]],
+    [26.546, [752000, 778000, 804000, 830000, 856000, 881000, 907000, 933000]],
+    [28.588, [795000, 821000, 848000, 876000, 903000, 930000, 957000, 985000]],
+    [30.630, [854000, 882000, 910000, 938000, 966000, 994000, 1022000, 1051000]],
+    [32.672, [922000, 952000, 983000, 1013000, 1044000, 1074000, 1104000, 1135000]],
+    [35.735, [1318000, 1342000, 1367000, 1391000, 1416000, 1440000, 1464000, 1489000]],
+    [38.798, [1521000, 1526000, 1526000, 1538000, 1555000, 1555000, 1555000, 1583000]],
+    [41.861, [2621000, 2645000, 2669000, 2693000, 2716000, 2740000, 2764000, 2788000]],
+    [45.945, [3495000, 3527000, 3559000, 3590000, 3622000, 3654000, 3685000, 3717000]],
+  ];
+
+  function bonusRate(prevMonthAfterInsurance, dependents) {
+    const col = Math.min(dependents, 7);
+    let rate = 0;
+    for (const [r, lows] of BONUS_RATE_TABLE) {
+      if (prevMonthAfterInsurance >= lows[col]) rate = r;
+      else break;
+    }
+    return rate / 100;
+  }
+
+  // ==========================================================================
+  // 【年末調整】令和8年度税制改正 確定値（令和8・9年分の時限特例含む）
+  // ==========================================================================
+  // 基礎控除額表（合計所得金額に応じる）
+  function kisoKoujoNenmatsu(goukeiShotoku) {
+    if (goukeiShotoku <= 1320000) return 1040000;
+    if (goukeiShotoku <= 3360000) return 880000;
+    if (goukeiShotoku <= 4890000) return 680000;
+    if (goukeiShotoku <= 6550000) return 670000;
+    if (goukeiShotoku <= 23500000) return 620000;
+    if (goukeiShotoku <= 24000000) return 480000;
+    if (goukeiShotoku <= 24500000) return 320000;
+    if (goukeiShotoku <= 25000000) return 160000;
+    return 0;
+  }
+
+  // 給与所得控除額表（年間収入に応じる）
+  function kyuyoKoujoNenkan(shunyu) {
+    if (shunyu <= 2200000) return 740000;
+    if (shunyu <= 3600000) return shunyu * 0.30 + 80000;
+    if (shunyu <= 6600000) return shunyu * 0.20 + 440000;
+    if (shunyu <= 8500000) return shunyu * 0.10 + 1100000;
+    return 1950000;
+  }
+
+  // 人的控除 定額表
+  const JINTEKI_KOUJO = {
+    haigushaIppan: 380000,
+    haigushaRoujin: 480000,
+    fuyouIppan: 380000,
+    fuyouTokutei: 630000,
+    fuyouRoujinBekkyo: 480000,
+    doukyoRoushin: 580000,
+    shougaiIppan: 270000,
+    shougaiTokubetsu: 400000,
+    doukyoTokubetsuKasan: 350000,
+    kafu: 270000,
+    hitorioya: 350000, // ※令和8年分は改正前の額。控除額引上げは令和9年分から
+    kinrouGakusei: 270000,
+  };
+
+  // 算出所得税額の速算表（課税総所得金額に応じる・全国一律）
+  function shotokuzeiSokusan(kazeiShotoku) {
+    if (kazeiShotoku <= 1950000) return kazeiShotoku * 0.05;
+    if (kazeiShotoku <= 3300000) return kazeiShotoku * 0.10 - 97500;
+    if (kazeiShotoku <= 6950000) return kazeiShotoku * 0.20 - 427500;
+    if (kazeiShotoku <= 9000000) return kazeiShotoku * 0.23 - 636000;
+    if (kazeiShotoku <= 18000000) return kazeiShotoku * 0.33 - 1536000;
+    if (kazeiShotoku <= 40000000) return kazeiShotoku * 0.40 - 2796000;
+    return kazeiShotoku * 0.45 - 4796000;
+  }
+
+  return {
+    roundDown, mround,
+    kyuyoKoujoGetsu, kisoKoujoGetsu, zeigakuGetsu,
+    HAIGUSHA_KOUJO_GETSU, FUYOU_KOUJO_GETSU,
+    kouranMonthlyTax, otsuranMonthlyTax,
+    bonusRate,
+    kisoKoujoNenmatsu, kyuyoKoujoNenkan, JINTEKI_KOUJO, shotokuzeiSokusan,
+  };
+})();
+
+if (typeof module !== "undefined") module.exports = Calc;
+
+</script>
+<script>
+// ==== data.js ====
+// ============================================================================
+// data.js — データモデル・保存/読込（ブラウザ内 localStorage + JSONバックアップ）
+// ============================================================================
+
+const STORAGE_PREFIX = "payrollAppData_r8_v1";     // 各プロファイル（会社）のデータ本体のキー接頭辞
+const LEGACY_STORAGE_KEY = STORAGE_PREFIX;          // プロファイル機能導入前の単一データ用キー（移行用）
+const PROFILES_META_KEY = "payrollAppProfiles_r8_v1"; // プロファイル一覧・現在選択中プロファイルの管理
+
+function profileDataKey(profileId) { return `${STORAGE_PREFIX}__profile_${profileId}`; }
+
+function loadProfilesMeta() {
+  try {
+    const raw = localStorage.getItem(PROFILES_META_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { console.warn("load profiles meta failed", e); }
+  return null;
+}
+function saveProfilesMeta(meta) {
+  try { localStorage.setItem(PROFILES_META_KEY, JSON.stringify(meta)); }
+  catch (e) { console.warn("save profiles meta failed", e); }
+}
+
+function defaultData() {
+  return {
+    company: {
+      name: "株式会社サンプル商事", hojin: "", zip: "", addr: "", rep: "",
+      kenpoRate: 0.0991, kaigoRate: 0.0162, kouseiRate: 0.183,
+      koyouFlag: true, koyouEmpRate: 0.005, koyouCoRate: 0.0085,
+      shienRate: 0.0023, shienStart: 202604,
+      nendo: "令和8年度", memo: ""
+    },
+    employees: [
+      { id: 1, name: "山田 一郎", birth: "1985-04-12", hire: "2015-04-01", addr: "",
+        fuyoShinkoku: true, haigusha: true, kaigo: false, koyouKobetsu: true,
+        ippan: 1, tokutei: 0, roujin: 0, doukyo: 0, shougai: 0, nenchoTaisho: true,
+        juminzeiJune: 12000, juminzeiOther: 10000, memo: "" },
+      { id: 2, name: "鈴木 良子", birth: "1990-08-03", hire: "2018-07-01", addr: "",
+        fuyoShinkoku: true, haigusha: false, kaigo: false, koyouKobetsu: true,
+        ippan: 0, tokutei: 0, roujin: 0, doukyo: 0, shougai: 0, nenchoTaisho: true,
+        juminzeiJune: 8000, juminzeiOther: 7000, memo: "" },
+      { id: 3, name: "田中 正", birth: "1978-01-20", hire: "2010-04-01", addr: "",
+        fuyoShinkoku: true, haigusha: true, kaigo: true, koyouKobetsu: true,
+        ippan: 1, tokutei: 1, roujin: 0, doukyo: 1, shougai: 0, nenchoTaisho: true,
+        juminzeiJune: 15000, juminzeiOther: 13000, memo: "特定扶養1人・同居老親1人の例" },
+      { id: 4, name: "佐藤 健", birth: "1970-03-05", hire: "2008-06-01", addr: "",
+        fuyoShinkoku: true, haigusha: false, kaigo: true, koyouKobetsu: false,
+        ippan: 0, tokutei: 0, roujin: 0, doukyo: 0, shougai: 0, nenchoTaisho: true,
+        juminzeiJune: 20000, juminzeiOther: 18000, memo: "役員のため雇用保険 個人適用なし" },
+    ],
+    nextEmployeeId: 5,
+    hyojunHistory: [
+      { id: 1, empId: 1, startYm: 202509, kenpoGaku: 300000, kouseiGaku: 300000, reason: "定時決定", memo: "令和8年度の定時決定" },
+      { id: 2, empId: 2, startYm: 202509, kenpoGaku: 260000, kouseiGaku: 260000, reason: "定時決定", memo: "令和8年度の定時決定" },
+      { id: 3, empId: 3, startYm: 202509, kenpoGaku: 380000, kouseiGaku: 380000, reason: "定時決定", memo: "令和8年度の定時決定" },
+      { id: 4, empId: 4, startYm: 202509, kenpoGaku: 650000, kouseiGaku: 650000, reason: "定時決定", memo: "令和8年度の定時決定（役員）" },
+    ],
+    nextHistId: 5,
+    monthly: {},   // key `${empId}_${yyyymm}` -> {kihonkyu,shokate,zangyo,tsukin,sonota}
+    bonus: [],     // {id, empId, date(YYYY-MM-DD), amount, sonota}
+    nextBonusId: 1,
+    nenchoInputs: {}, // key `${empId}_${year}` -> {seimeihoken, jutaku, shougaiTouGaku, jishinHoken, tokuteiShinzoku}
+    gensenExtra: {}, // key `${empId}_${year}` -> 源泉徴収票（開発中）専用の追加入力
+  };
+}
+
+// 初回起動時：プロファイル管理のメタ情報が無ければ作成する。
+// このアプリを以前から使っていて、旧方式（単一固定キー）のデータが残っている場合は、
+// それを失わないよう自動的に「プロファイル1」として引き継ぐ。
+function ensureProfilesMeta() {
+  let meta = loadProfilesMeta();
+  if (meta && Array.isArray(meta.profiles) && meta.profiles.length > 0) return meta;
+
+  let legacyData = null;
+  try {
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (raw) legacyData = JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+
+  const firstId = 1;
+  if (legacyData) {
+    const label = (legacyData.company && legacyData.company.name) ? legacyData.company.name : "会社1";
+    try { localStorage.setItem(profileDataKey(firstId), JSON.stringify(legacyData)); } catch (e) { /* ignore */ }
+    meta = { profiles: [{ id: firstId, name: label }], activeId: firstId, nextId: 2 };
+  } else {
+    try { localStorage.setItem(profileDataKey(firstId), JSON.stringify(defaultData())); } catch (e) { /* ignore */ }
+    meta = { profiles: [{ id: firstId, name: "会社1" }], activeId: firstId, nextId: 2 };
+  }
+  saveProfilesMeta(meta);
+  return meta;
+}
+
+const Store = (function () {
+  let data = null;
+
+  function load() {
+    const meta = ensureProfilesMeta();
+    try {
+      const raw = localStorage.getItem(profileDataKey(meta.activeId));
+      if (raw) { data = JSON.parse(raw); return data; }
+    } catch (e) { console.warn("load failed", e); }
+    data = defaultData();
+    return data;
+  }
+  function save() {
+    const meta = loadProfilesMeta();
+    const key = meta ? profileDataKey(meta.activeId) : LEGACY_STORAGE_KEY;
+    try { localStorage.setItem(key, JSON.stringify(data)); }
+    catch (e) { console.warn("save failed", e); }
+  }
+  function get() { return data; }
+  function resetToDefault() { data = defaultData(); save(); }
+
+  // ---- 会社プロファイル管理 ----
+  function listProfiles() {
+    const meta = ensureProfilesMeta();
+    return meta.profiles;
+  }
+  function activeProfileId() {
+    return ensureProfilesMeta().activeId;
+  }
+  function switchProfile(id) {
+    save(); // 切り替え前に現在のプロファイルを保存
+    const meta = ensureProfilesMeta();
+    if (!meta.profiles.some(p => p.id === id)) return false;
+    meta.activeId = id;
+    saveProfilesMeta(meta);
+    load();
+    return true;
+  }
+  function addProfile(name) {
+    save();
+    const meta = ensureProfilesMeta();
+    const id = meta.nextId++;
+    meta.profiles.push({ id, name: name || `会社${id}` });
+    meta.activeId = id;
+    saveProfilesMeta(meta);
+    try { localStorage.setItem(profileDataKey(id), JSON.stringify(defaultData())); } catch (e) { /* ignore */ }
+    load();
+    return id;
+  }
+  function renameProfile(id, name) {
+    const meta = ensureProfilesMeta();
+    const p = meta.profiles.find(p => p.id === id);
+    if (!p) return false;
+    p.name = name;
+    saveProfilesMeta(meta);
+    return true;
+  }
+  function deleteProfile(id) {
+    const meta = ensureProfilesMeta();
+    if (meta.profiles.length <= 1) return false; // 最後の1つは削除させない
+    meta.profiles = meta.profiles.filter(p => p.id !== id);
+    try { localStorage.removeItem(profileDataKey(id)); } catch (e) { /* ignore */ }
+    if (meta.activeId === id) meta.activeId = meta.profiles[0].id;
+    saveProfilesMeta(meta);
+    load();
+    return true;
+  }
+
+  function exportJson() {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const ts = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    a.href = url;
+    a.download = `給与データバックアップ_${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+  function importJson(file, cb) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        data = parsed;
+        save();
+        cb(true);
+      } catch (err) {
+        cb(false, err);
+      }
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
+  return {
+    load, save, get, resetToDefault, exportJson, importJson,
+    listProfiles, activeProfileId, switchProfile, addProfile, renameProfile, deleteProfile,
+  };
+})();
+
+// ---- Utility formatters ----
+function yen(n) {
+  n = Math.round(n || 0);
+  return n.toLocaleString("ja-JP");
+}
+function pct(n, digits = 3) {
+  return (n * 100).toFixed(digits) + "%";
+}
+function ymLabel(yyyymm) {
+  const y = Math.floor(yyyymm / 100), m = yyyymm % 100;
+  return `${y}年${m}月`;
+}
+function monthKey(empId, yyyymm) { return `${empId}_${yyyymm}`; }
+function nenchoKey(empId, year) { return `${empId}_${year}`; }
+
+function findEmployee(id) {
+  return Store.get().employees.find(e => e.id === Number(id));
+}
+
+// 退職者が「最後の給与」とした対象年月（yyyymm）以前かどうかを判定する。
+// 退職していない、または最終給与年月が未設定の場合は常にtrue。
+function isEmployeeActiveForYm(emp, yyyymm) {
+  if (!emp) return false;
+  if (!emp.retired || !emp.retireLastYm) return true;
+  return yyyymm <= emp.retireLastYm;
+}
+// 退職者の「yyyy年mm月給与後退職」ラベル文字列（未退職なら空文字）
+function retireLabelText(emp) {
+  if (!emp || !emp.retired || !emp.retireLastYm) return "";
+  const y = Math.floor(emp.retireLastYm / 100), m = emp.retireLastYm % 100;
+  return `${y}年${m}月給与後退職`;
+}
+// 選択肢やヘッダーなどに表示する氏名（退職者は退職ラベルつき）
+function employeeDisplayName(emp) {
+  if (!emp) return "";
+  const label = retireLabelText(emp);
+  return label ? `${emp.name}（${label}）` : emp.name;
+}
+
+// 標準報酬月額履歴から、対象年月時点で適用される最新の等級を探す
+function getHyojunHoshu(empId, yyyymm) {
+  const hist = Store.get().hyojunHistory.filter(h => h.empId === Number(empId) && h.startYm <= yyyymm);
+  if (hist.length === 0) return { kenpoGaku: 0, kouseiGaku: 0 };
+  hist.sort((a, b) => b.startYm - a.startYm);
+  return { kenpoGaku: hist[0].kenpoGaku, kouseiGaku: hist[0].kouseiGaku };
+}
+
+function dependentsCount(emp) {
+  return (emp.ippan || 0) + (emp.tokutei || 0) + (emp.roujin || 0) + (emp.doukyo || 0) + (emp.shougai || 0);
+}
+
+// 前月のYYYYMMを返す
+function prevYm(yyyymm) {
+  let y = Math.floor(yyyymm / 100), m = yyyymm % 100;
+  m -= 1;
+  if (m === 0) { m = 12; y -= 1; }
+  return y * 100 + m;
+}
+function nextYm(yyyymm) {
+  let y = Math.floor(yyyymm / 100), m = yyyymm % 100;
+  m += 1;
+  if (m === 13) { m = 1; y += 1; }
+  return y * 100 + m;
+}
+
+// ---- 年度（西暦年）まわりのユーティリティ ----
+// 西暦年→和暦（令和）表示。令和1年=2019年。
+function reiwaLabel(year) {
+  return `令和${year - 2018}年`;
+}
+// 現在のプロファイルに実データが存在する年、および「実際の現在の年（PCのシステム日付）」を
+// 選択候補として返す。データが1件も無い年は候補に挙げない（システム日付の年だけは例外で、
+// 実際にその年になれば自動的に候補へ加わり、入力を開始できるようにする）。
+function getAvailableYears() {
+  const data = Store.get();
+  const years = new Set();
+  Object.keys(data.monthly || {}).forEach(k => {
+    const ym = Number(k.split("_")[1]);
+    if (ym) years.add(Math.floor(ym / 100));
+  });
+  (data.bonus || []).forEach(b => { if (b.date) years.add(Number(String(b.date).slice(0, 4))); });
+  Object.keys(data.nenchoInputs || {}).forEach(k => {
+    const y = Number(k.split("_")[1]);
+    if (y) years.add(y);
+  });
+  Object.keys(data.gensenExtra || {}).forEach(k => {
+    const y = Number(k.split("_")[1]);
+    if (y) years.add(y);
+  });
+  years.add(new Date().getFullYear());
+  return Array.from(years).sort((a, b) => a - b);
+}
+// 現在選択すべき年度の初期値を決める：実際の今年が候補にあればそれを、
+// 無ければ候補の中で最も新しい年を採用する。
+function pickDefaultYear() {
+  const avail = getAvailableYears();
+  const real = new Date().getFullYear();
+  if (avail.includes(real)) return real;
+  return avail[avail.length - 1];
+}
+
+</script>
+<script>
+// ==== payroll.js ====
+// ============================================================================
+// payroll.js — 月次給与・賞与・年末調整の統合計算（Excel版の各シートのロジックを再現）
+// ============================================================================
+
+function dateToYyyymm(dateStr) {
+  const [y, m] = dateStr.split("-").map(Number);
+  return y * 100 + m;
+}
+
+// ---- 月次給与：1名・1か月分の全項目を計算する ----
+function computeMonthlyRow(empId, yyyymm) {
+  const emp = findEmployee(empId);
+  const company = Store.get().company;
+  const stored = Store.get().monthly[monthKey(empId, yyyymm)];
+  const input = stored || { kihonkyu: 0, shokate: 0, zangyo: 0, tsukin: 0, tsukinKazei: 0, sonota: 0 };
+  if (input.tsukinKazei === undefined) input.tsukinKazei = 0;
+
+  if (!emp) {
+    return { empty: true, input };
+  }
+
+  // 退職者が「最後の給与」とした対象年月より後は、給与の支給自体がないものとして扱う。
+  // 社会保険料（健保・介護・厚生年金・雇用保険・支援金）や住民税、所得税など、
+  // すべての控除項目も0にし、差引支給額も0にする（標準報酬月額が残っていても計算しない）。
+  if (!isEmployeeActiveForYm(emp, yyyymm)) {
+    return {
+      empty: false, emp,
+      input: { kihonkyu: 0, shokate: 0, zangyo: 0, tsukin: 0, tsukinKazei: 0, sonota: 0 },
+      kazeiSoshikyu: 0, kazeiKyuyoKei: 0, souShikyu: 0,
+      hyojun: { kenpoGaku: 0, kouseiGaku: 0 },
+      kenpo: 0, kaigo: 0, kousei: 0, koyou: 0, shien: 0, shahoKei: 0, A: 0,
+      isOtsu: !emp.fuyoShinkoku, taxDetail: null, tax: 0,
+      juminzei: 0, sonota: 0, koujoKei: 0, sashihiki: 0,
+    };
+  }
+
+  // 課税総支給額：基本給・諸手当・残業手当・通勤手当(課税分)の合計（通勤手当の非課税分は含まない）
+  const kazeiSoshikyu = (input.kihonkyu || 0) + (input.shokate || 0) + (input.zangyo || 0) + (input.tsukinKazei || 0);
+  const kazeiKyuyoKei = kazeiSoshikyu; // 後方互換のためのエイリアス
+  const souShikyu = kazeiSoshikyu + (input.tsukin || 0);
+
+  const hyojun = getHyojunHoshu(empId, yyyymm);
+  const kenpo = hyojun.kenpoGaku * company.kenpoRate / 2;
+  const kaigo = emp.kaigo ? hyojun.kenpoGaku * company.kaigoRate / 2 : 0;
+  const kousei = hyojun.kouseiGaku * company.kouseiRate / 2;
+  const koyouApplies = company.koyouFlag && emp.koyouKobetsu;
+  const koyou = koyouApplies ? souShikyu * company.koyouEmpRate : 0;
+  const shienApplies = yyyymm >= company.shienStart;
+  const shien = shienApplies ? hyojun.kenpoGaku * company.shienRate / 2 : 0;
+  const shahoKei = kenpo + kaigo + kousei + koyou + shien;
+
+  // 所得税の計算は「課税総支給額」から社会保険料等を差し引いた金額（A）を用いる
+  const A = kazeiSoshikyu - shahoKei;
+
+  const isOtsu = !emp.fuyoShinkoku;
+  let taxDetail = null, tax;
+  if (isOtsu) {
+    tax = Calc.otsuranMonthlyTax(Math.max(0, A));
+  } else {
+    taxDetail = Calc.kouranMonthlyTax(Math.max(0, A), emp.haigusha, dependentsCount(emp));
+    tax = taxDetail.tax;
+  }
+
+  const month = yyyymm % 100;
+  const juminzei = month === 6 ? (emp.juminzeiJune || 0) : (emp.juminzeiOther || 0);
+  const sonota = input.sonota || 0;
+  const koujoKei = shahoKei + tax + juminzei + sonota;
+  const sashihiki = souShikyu - koujoKei;
+
+  return {
+    empty: false, emp, input, kazeiSoshikyu, kazeiKyuyoKei, souShikyu,
+    hyojun, kenpo, kaigo, kousei, koyou, shien, shahoKei, A,
+    isOtsu, taxDetail, tax, juminzei, sonota, koujoKei, sashihiki
+  };
+}
+
+// 前月の入力値を炭くり返す（同じ従業員の直近の入力済み月を遡って探す）
+function findCarryForward(empId, yyyymm) {
+  let ym = prevYm(yyyymm);
+  for (let i = 0; i < 24; i++) {
+    const rec = Store.get().monthly[monthKey(empId, ym)];
+    if (rec) return { kihonkyu: rec.kihonkyu, shokate: rec.shokate, zangyo: rec.zangyo, tsukin: rec.tsukin, tsukinKazei: rec.tsukinKazei || 0, sonota: 0 };
+    ym = prevYm(ym);
+  }
+  return null;
+}
+
+function saveMonthlyInput(empId, yyyymm, fields) {
+  const key = monthKey(empId, yyyymm);
+  const cur = Store.get().monthly[key] || { kihonkyu: 0, shokate: 0, zangyo: 0, tsukin: 0, tsukinKazei: 0, sonota: 0 };
+  Store.get().monthly[key] = Object.assign({}, cur, fields);
+  Store.save();
+}
+
+// ---- 賞与：1件分の全項目を計算する ----
+function computeBonusRow(bonusRec) {
+  const emp = findEmployee(bonusRec.empId);
+  const company = Store.get().company;
+  if (!emp) return { empty: true };
+
+  const bYm = dateToYyyymm(bonusRec.date);
+  const pYm = prevYm(bYm);
+  const prevRow = computeMonthlyRow(bonusRec.empId, pYm);
+  const zenGetsuKyuyo = prevRow.empty ? 0 : prevRow.kazeiKyuyoKei;
+  const zenGetsuShaho = prevRow.empty ? 0 : prevRow.shahoKei;
+  const zenGetsuGoAto = zenGetsuKyuyo - zenGetsuShaho;
+
+  const amount = bonusRec.amount || 0;
+  const kenpo = amount * company.kenpoRate / 2;
+  const kaigo = emp.kaigo ? amount * company.kaigoRate / 2 : 0;
+  const kousei = Math.min(amount, 1500000) * company.kouseiRate / 2;
+  const koyouApplies = company.koyouFlag && emp.koyouKobetsu;
+  const koyou = koyouApplies ? amount * company.koyouEmpRate : 0;
+  const shien = bYm >= company.shienStart ? amount * company.shienRate / 2 : 0;
+  const shahoKei = kenpo + kaigo + kousei + koyou + shien;
+  const afterShaho = amount - shahoKei;
+
+  const isOtsu = !emp.fuyoShinkoku;
+  const deps = dependentsCount(emp);
+  const rate = isOtsu ? null : Calc.bonusRate(zenGetsuGoAto, deps);
+  const tax = isOtsu ? null : Calc.roundDown(afterShaho * rate, 0);
+  const sonota = bonusRec.sonota || 0;
+  const sashihiki = isOtsu ? null : (amount - shahoKei - tax - sonota);
+
+  return {
+    empty: false, emp, amount, zenGetsuKyuyo, zenGetsuShaho, zenGetsuGoAto,
+    kenpo, kaigo, kousei, koyou, shien, shahoKei, afterShaho,
+    isOtsu, rate, tax, sonota, sashihiki
+  };
+}
+
+// ---- 年末調整：1名・1年分 ----
+function computeNencho(empId, year) {
+  const emp = findEmployee(empId);
+  if (!emp) return { empty: true };
+  const inputs = Store.get().nenchoInputs[nenchoKey(empId, year)] || { seimeihoken: 0, jutaku: 0, shougaiTouGaku: 0, jishinHoken: 0, tokuteiShinzoku: 0 };
+
+  let kyuyoShunyu = 0, shahoKei = 0, genzeiKei = 0;
+  for (let m = 1; m <= 12; m++) {
+    // 個人別賃金台帳と同様、月次給与でまだ保存されていない月は全項目0円として集計する
+    const row = computeMonthlyRowForLedger(empId, year * 100 + m);
+    if (!row.empty) {
+      kyuyoShunyu += row.kazeiKyuyoKei;
+      shahoKei += row.shahoKei;
+      genzeiKei += row.tax;
+    }
+  }
+  Store.get().bonus.filter(b => b.empId === Number(empId) && dateToYyyymm(b.date) >= year * 100 + 1 && dateToYyyymm(b.date) <= year * 100 + 12)
+    .forEach(b => {
+      const br = computeBonusRow(b);
+      if (!br.empty) {
+        kyuyoShunyu += br.amount;
+        shahoKei += br.shahoKei;
+        genzeiKei += (br.tax || 0);
+      }
+    });
+
+  const kyuyoKoujo = Calc.kyuyoKoujoNenkan(kyuyoShunyu);
+  const kyuyoShotoku = Math.max(0, kyuyoShunyu - kyuyoKoujo);
+  const haiguKoujo = emp.haigusha ? Calc.JINTEKI_KOUJO.haigushaIppan : 0;
+  const fuyouKoujo = (emp.ippan || 0) * Calc.JINTEKI_KOUJO.fuyouIppan
+    + (emp.tokutei || 0) * Calc.JINTEKI_KOUJO.fuyouTokutei
+    + (emp.roujin || 0) * Calc.JINTEKI_KOUJO.fuyouRoujinBekkyo
+    + (emp.doukyo || 0) * Calc.JINTEKI_KOUJO.doukyoRoushin;
+  const shougaiKoujo = inputs.shougaiTouGaku || 0;
+  const kisoKoujo = Calc.kisoKoujoNenmatsu(kyuyoShotoku);
+  const seimeihoken = inputs.seimeihoken || 0;
+  const jishinHoken = inputs.jishinHoken || 0;
+  const tokuteiShinzoku = inputs.tokuteiShinzoku || 0;
+  const shotokuKoujoKei = shahoKei + haiguKoujo + fuyouKoujo + shougaiKoujo + kisoKoujo + seimeihoken + jishinHoken + tokuteiShinzoku;
+
+  const kazeiShotoku = Math.max(0, Calc.roundDown(kyuyoShotoku - shotokuKoujoKei, -3));
+  const sanshutsuZeigaku = Math.max(0, Calc.shotokuzeiSokusan(kazeiShotoku));
+  const jutaku = inputs.jutaku || 0;
+  const nenchoShotokuZeigaku = Math.max(0, sanshutsuZeigaku - jutaku);
+  const nenchoNenzeigaku = Calc.roundDown(nenchoShotokuZeigaku * 1.021, -2);
+  const kabusoku = genzeiKei - nenchoNenzeigaku;
+
+  return {
+    empty: false, emp, inputs,
+    kyuyoShunyu, shahoKei, genzeiKei, kyuyoKoujo, kyuyoShotoku,
+    haiguKoujo, fuyouKoujo, shougaiKoujo, kisoKoujo, seimeihoken, jishinHoken, tokuteiShinzoku, shotokuKoujoKei,
+    kazeiShotoku, sanshutsuZeigaku, jutaku, nenchoShotokuZeigaku, nenchoNenzeigaku, kabusoku
+  };
+}
+
+</script>
+<script>
+// ==== ui_core.js ====
+// ============================================================================
+// ui_core.js — ナビゲーション・共通UIヘルパー
+// ============================================================================
+
+const NAV = [
+  { group: "設定", items: [
+    { id: "company", label: "会社情報" },
+    { id: "employees", label: "従業員マスタ" },
+    { id: "hyojun", label: "標準報酬月額履歴" },
+  ]},
+  { group: "給与計算", items: [
+    { id: "monthly", label: "月次給与" },
+    { id: "bonus", label: "賞与計算" },
+  ]},
+  { group: "印刷・帳票", items: [
+    { id: "payslip", label: "給与明細" },
+    { id: "bonusslip", label: "賞与明細" },
+    { id: "ledger", label: "賃金台帳" },
+    { id: "annualledger", label: "個人別賃金台帳" },
+  ]},
+  { group: "年末調整", items: [
+    { id: "nencho", label: "年末調整" },
+    { id: "gensen", label: "源泉徴収票" },
+    { id: "gensen2", label: "源泉徴収票（開発中）" },
+  ]},
+  { group: "参考・管理", items: [
+    { id: "taxtables", label: "税額表について" },
+    { id: "backup", label: "データのバックアップ" },
+  ]},
+];
+
+let currentPage = "company";
+// 現在選択中の年度（西暦）。ブートストラップ時にpickDefaultYear()で初期化される。
+let currentYear = new Date().getFullYear();
+function setCurrentYear(y) {
+  currentYear = y;
+  updatePageTitle();
+  renderSidebar();
+  renderPage();
+}
+function updatePageTitle() {
+  const t = `給与計算・年末調整システム（${reiwaLabel(currentYear)}分）`;
+  document.title = t;
+  window.__PAGE_TITLE = t;
+}
+
+function el(tag, attrs = {}, children = []) {
+  const e = document.createElement(tag);
+  for (const k in attrs) {
+    if (k === "class") e.className = attrs[k];
+    else if (k === "html") e.innerHTML = attrs[k];
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  (Array.isArray(children) ? children : [children]).forEach(c => {
+    if (c === null || c === undefined) return;
+    if (typeof c === "string") e.appendChild(document.createTextNode(c));
+    else e.appendChild(c);
+  });
+  return e;
+}
+
+function flash(msg, isWarn = false) {
+  const f = document.getElementById("flash");
+  f.textContent = msg;
+  f.style.background = isWarn ? "#a3401f" : "#173a5e";
+  f.classList.add("show");
+  clearTimeout(flash._t);
+  flash._t = setTimeout(() => f.classList.remove("show"), 2200);
+}
+
+// 印刷時のページサイズ・向きを、名前付き@page（ブラウザによって対応が不安定）に頼らず、
+// <style>タグへ直接ルールを書き込むことで確実に切り替える。
+function printWithPageStyle(pageRule, afterClass) {
+  const styleEl = document.getElementById("dynamicPageStyle");
+  styleEl.textContent = `@media print { @page { ${pageRule} } }`;
+  if (afterClass) document.body.classList.add(afterClass);
+  window.print();
+  setTimeout(() => {
+    styleEl.textContent = "";
+    if (afterClass) document.body.classList.remove(afterClass);
+  }, 500);
+}
+
+// 給与明細・賞与明細の単票印刷：印刷中だけ printing-single-slip クラスを付与し、
+// #printSlip 以外（賃金台帳など）と表示が重ならないようにする。
+// 給与明細・賞与明細の一括印刷：A4 1枚に4名分（2×2）を並べ、各枠に点線の
+// 切り取り線を入れる。htmlList は1名分の明細HTML文字列の配列。
+function buildBulkSlipPages(htmlList) {
+  let pages = "";
+  for (let i = 0; i < htmlList.length; i += 4) {
+    const cells = htmlList.slice(i, i + 4).map(h => `<div class="slip-cell">${h}</div>`).join("");
+    pages += `<div class="slip-page">${cells}</div>`;
+  }
+  return pages;
+}
+
+function printSingleSlip() {
+  document.body.classList.add("printing-single-slip");
+  window.print();
+  setTimeout(() => document.body.classList.remove("printing-single-slip"), 500);
+}
+
+function renderSidebar() {
+  const sb = document.getElementById("sidebar");
+  sb.innerHTML = "";
+  sb.appendChild(el("div", { class: "brand" }, [
+    el("h1", {}, "給与計算・年末調整"),
+    el("div", { class: "yr" }, `${reiwaLabel(currentYear)}（${currentYear}年）分`),
+  ]));
+
+  // ---- 会社プロファイル切り替え ----
+  const profiles = Store.listProfiles();
+  const activeId = Store.activeProfileId();
+  const profileBox = el("div", { class: "profilebox" });
+  const profileSelect = el("select", {
+    class: "profileselect",
+    onchange: (e) => {
+      Store.switchProfile(Number(e.target.value));
+      currentYear = pickDefaultYear();
+      renderSidebar();
+      renderPage();
+      flash("会社プロファイルを切り替えました");
+    }
+  });
+  profiles.forEach(p => {
+    const opt = el("option", { value: String(p.id) }, p.name);
+    if (p.id === activeId) opt.setAttribute("selected", "selected");
+    profileSelect.appendChild(opt);
+  });
+  profileBox.appendChild(profileSelect);
+
+  const profileBtnRow = el("div", { class: "profilebtnrow" });
+  profileBtnRow.appendChild(el("button", {
+    class: "profilebtn", title: "会社プロファイルを追加",
+    onclick: () => {
+      const name = prompt("新しい会社プロファイルの名前を入力してください（例：株式会社〇〇）", "");
+      if (name === null) return;
+      const trimmed = name.trim();
+      if (!trimmed) { flash("名前を入力してください", true); return; }
+      Store.addProfile(trimmed);
+      currentYear = pickDefaultYear();
+      renderSidebar();
+      renderPage();
+      flash(`「${trimmed}」を追加して切り替えました`);
+    }
+  }, "＋追加"));
+  profileBtnRow.appendChild(el("button", {
+    class: "profilebtn", title: "現在の会社プロファイル名を変更",
+    onclick: () => {
+      const cur = profiles.find(p => p.id === activeId);
+      const name = prompt("会社プロファイルの名前を変更", cur ? cur.name : "");
+      if (name === null) return;
+      const trimmed = name.trim();
+      if (!trimmed) { flash("名前を入力してください", true); return; }
+      Store.renameProfile(activeId, trimmed);
+      renderSidebar();
+      flash("名前を変更しました");
+    }
+  }, "名前変更"));
+  profileBtnRow.appendChild(el("button", {
+    class: "profilebtn danger", title: "現在の会社プロファイルを削除",
+    onclick: () => {
+      if (profiles.length <= 1) { flash("最後の1つのプロファイルは削除できません", true); return; }
+      const cur = profiles.find(p => p.id === activeId);
+      if (!confirm(`「${cur ? cur.name : ""}」のデータを削除します。この操作は取り消せません。よろしいですか？`)) return;
+      Store.deleteProfile(activeId);
+      currentYear = pickDefaultYear();
+      renderSidebar();
+      renderPage();
+      flash("プロファイルを削除しました");
+    }
+  }, "削除"));
+  profileBox.appendChild(profileBtnRow);
+  sb.appendChild(profileBox);
+
+  // ---- 対象年度切り替え ----
+  // 選択候補は「実際にデータが入力済みの年」＋「システム日付上の今年」のみ。
+  // 未入力の年（例：まだ来ていない2028年など）は候補に出さない。
+  const availableYears = getAvailableYears();
+  if (!availableYears.includes(currentYear)) currentYear = pickDefaultYear();
+  const yearBox = el("div", { class: "profilebox" });
+  yearBox.appendChild(el("div", { style: "font-size:10.5px;color:#7d97b2;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;" }, "対象年度"));
+  const yearSelect = el("select", {
+    class: "profileselect",
+    onchange: (e) => { setCurrentYear(Number(e.target.value)); flash(`対象年度を${reiwaLabel(Number(e.target.value))}（${e.target.value}年）分に切り替えました`); }
+  });
+  availableYears.forEach(y => {
+    const opt = el("option", { value: String(y) }, `${reiwaLabel(y)}（${y}年）分`);
+    if (y === currentYear) opt.setAttribute("selected", "selected");
+    yearSelect.appendChild(opt);
+  });
+  yearBox.appendChild(yearSelect);
+  sb.appendChild(yearBox);
+
+  NAV.forEach(g => {
+    const grp = el("div", { class: "navgroup" });
+    grp.appendChild(el("div", { class: "label" }, g.group));
+    g.items.forEach(item => {
+      const active = item.id === currentPage;
+      const row = el("div", { class: "navitem" + (active ? " active" : ""), onclick: () => navigate(item.id) }, [
+        el("span", { class: "dot" }),
+        item.label,
+      ]);
+      grp.appendChild(row);
+    });
+    sb.appendChild(grp);
+  });
+}
+
+function navigate(pageId) {
+  currentPage = pageId;
+  renderSidebar();
+  renderPage();
+}
+
+const PAGE_RENDERERS = {}; // filled in by ui_pages.js
+
+function renderPage() {
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  const fn = PAGE_RENDERERS[currentPage];
+  if (fn) fn(main);
+  else main.appendChild(el("p", {}, "ページが見つかりません。"));
+}
+
+</script>
+<script>
+// ==== ui_pages.js ====
+// ============================================================================
+// ui_pages.js — 各ページの画面描画（会社情報／従業員／標準報酬月額履歴／月次給与／
+// 賞与／給与明細／賞与明細／賃金台帳／個人別賃金台帳／年末調整／税額表／バックアップ）
+// ============================================================================
+
+function pageHead(title, desc) {
+  return el("div", { class: "pagehead" }, [
+    el("h2", {}, title),
+    el("p", {}, desc),
+  ]);
+}
+
+// 本アプリの税額計算ロジックは、今のところ「令和8年分」の税制のみに対応している。
+// 対象年度がそれ以外の年に切り替えられている場合、計算関連ページの先頭に注意書きを表示する。
+const CALC_SUPPORTED_YEAR = 2026;
+function calcYearWarningNote() {
+  if (currentYear === CALC_SUPPORTED_YEAR) return null;
+  return el("div", { class: "note warn" },
+    `⚠ 現在の対象年度は${reiwaLabel(currentYear)}（${currentYear}年）分ですが、本アプリの所得税計算ロジックは`
+    + `今のところ「${reiwaLabel(CALC_SUPPORTED_YEAR)}分」の税額表・控除額のまま計算しています。`
+    + `${reiwaLabel(currentYear)}分の正式な税制改正内容が公表され次第、計算式の更新が必要です`
+    + `（金額欄自体は年度をまたいで正しく保存・区別されます）。`);
+}
+
+function numInput(value, onChange, opts = {}) {
+  const i = el("input", {
+    type: "number", value: value ?? 0,
+    step: opts.step || "1",
+  });
+  i.addEventListener("change", () => onChange(parseFloat(i.value) || 0));
+  return i;
+}
+// 金額入力：カンマ区切りで表示し、フォーカス時のみ生の数字を編集できるようにする
+function moneyInput(value, onChange) {
+  const i = el("input", { type: "text", inputmode: "numeric" });
+  i.value = Number(value || 0).toLocaleString("ja-JP");
+  i.addEventListener("focus", () => {
+    i.value = String(Number(value || 0) || 0);
+    i.select();
+  });
+  i.addEventListener("blur", () => {
+    const n = parseFloat(String(i.value).replace(/[^0-9.\-]/g, "")) || 0;
+    value = n;
+    i.value = n.toLocaleString("ja-JP");
+    onChange(n);
+  });
+  i.addEventListener("keydown", (e) => { if (e.key === "Enter") i.blur(); });
+  return i;
+}
+// 西暦年月(YYYYMM)入力：▲▼や手入力で月が13や0になっても、正しく年をまたいで繰り上げ・繰り下げする
+function ymInput(value, onChange) {
+  const i = el("input", { type: "number", step: "1" });
+  i.value = value;
+  function normalize(v) {
+    let y = Math.floor(v / 100), m = v % 100;
+    while (m > 12) { m -= 12; y += 1; }
+    while (m < 1) { m += 12; y -= 1; }
+    return y * 100 + m;
+  }
+  i.addEventListener("change", () => {
+    const raw = parseInt(i.value, 10) || 0;
+    const norm = normalize(raw);
+    i.value = norm;
+    onChange(norm);
+  });
+  return i;
+}
+// 生年月日・入社日：ブラウザ標準のdate入力は環境によって曜日表示が崩れることがあるため、
+// プレーンなテキスト入力（YYYY-MM-DD）にして曜日表示自体が出ないようにする
+function plainDateInput(value, onChange) {
+  const i = el("input", { type: "text", placeholder: "YYYY-MM-DD" });
+  i.value = value || "";
+  i.addEventListener("change", () => onChange(i.value));
+  return i;
+}
+// 適用開始年月(YYYYMM数値)を、カレンダーの「年月」選択フォーム（type=month）で入力する。
+// 内部データは従来どおりYYYYMMの数値のまま保持し、表示側で変換する。
+function monthInputYm(valueYm, onChange) {
+  const i = el("input", { type: "month" });
+  const y = Math.floor((valueYm || 0) / 100), m = (valueYm || 0) % 100;
+  i.value = valueYm ? `${y}-${String(m).padStart(2, "0")}` : "";
+  i.addEventListener("change", () => {
+    if (!i.value) return;
+    const [yy, mm] = i.value.split("-").map(Number);
+    onChange(yy * 100 + mm);
+  });
+  return i;
+}
+function pctInput(value, onChange) {
+  const i = el("input", { type: "number", value: (value * 100).toFixed(3), step: "0.001" });
+  i.addEventListener("change", () => onChange((parseFloat(i.value) || 0) / 100));
+  return i;
+}
+function textInput(value, onChange, opts = {}) {
+  const i = el("input", { type: "text", value: value ?? "" });
+  if (opts.minWidth) i.style.minWidth = opts.minWidth;
+  i.addEventListener("change", () => onChange(i.value));
+  return i;
+}
+// カレンダーから日付を選ぶ入力（生年月日・入社日・賞与支給年月日など）。
+// ネイティブのinput[type=date]は、環境（特にWindows）によってはHTMLのlang指定を無視して
+// OSのロケール書式（曜日つき）で表示されてしまうことがある。
+// そこで、実際に見せるテキストは常に自前で "YYYY/MM/DD" に整形したreadonlyテキストにし、
+// ネイティブのdate入力は透明にして同じ場所に重ね、クリック時にカレンダーを開くためだけに使う。
+function dateInput(value, onChange) {
+  const wrap = el("div", { class: "date-input-wrap" });
+  const display = el("input", {
+    type: "text", class: "date-display", readonly: "readonly", placeholder: "YYYY/MM/DD",
+  });
+  display.value = value ? value.replace(/-/g, "/") : "";
+  const icon = el("span", { class: "date-icon", title: "カレンダーから選択" }, "📅");
+  const native = el("input", { type: "date", value: value || "" });
+  native.addEventListener("change", () => {
+    display.value = native.value ? native.value.replace(/-/g, "/") : "";
+    onChange(native.value);
+  });
+  const openPicker = () => {
+    if (native.showPicker) { try { native.showPicker(); return; } catch (e) { /* fallthrough */ } }
+    native.focus();
+  };
+  display.addEventListener("click", openPicker);
+  icon.addEventListener("click", openPicker);
+  wrap.append(display, icon, native);
+  return wrap;
+}
+function checkboxField(checked, onChange) {
+  const i = el("input", { type: "checkbox" });
+  i.checked = !!checked;
+  i.addEventListener("change", () => onChange(i.checked));
+  return i;
+}
+function selectField(options, value, onChange) {
+  const s = el("select");
+  options.forEach(([v, label]) => {
+    const o = el("option", { value: v }, label);
+    if (String(v) === String(value)) o.selected = true;
+    s.appendChild(o);
+  });
+  s.addEventListener("change", () => onChange(s.value));
+  return s;
+}
+function field(label, inputEl, wide = false) {
+  return el("div", { class: "field" + (wide ? " wide" : "") }, [
+    el("label", {}, label),
+    inputEl,
+  ]);
+}
+// 対象年を表示するだけの読み取り専用フィールド。年末調整・個人別賃金台帳・源泉徴収票の各ページは、
+// サイドバーの「対象年度」切り替えに連動して年を決めるため、ページ側では変更させず表示のみ行う。
+function yearDisplayField() {
+  return field("対象年（サイドバーの「対象年度」で切替）",
+    el("div", { style: "padding:6px 8px; font-weight:700; color:var(--navy); font-size:13.5px;" },
+      `${currentYear}年（${reiwaLabel(currentYear)}）`));
+}
+
+// ============================================================================
+// 1. 会社情報
+// ============================================================================
+function renderCompanyPage(main) {
+  const c = Store.get().company;
+  main.appendChild(pageHead("会社情報",
+    "自社の基本情報と保険料率を設定します。この内容は他のすべてのページで自動的に参照されます（1社専用です）。"));
+
+  const card1 = el("div", { class: "card" }, [el("h3", {}, "基本情報")]);
+  const row1 = el("div", { class: "field-row" });
+  row1.append(
+    field("会社名", textInput(c.name, v => { c.name = v; Store.save(); }), true),
+    field("法人番号", textInput(c.hojin, v => { c.hojin = v; Store.save(); })),
+    field("郵便番号", textInput(c.zip, v => { c.zip = v; Store.save(); })),
+  );
+  const row1b = el("div", { class: "field-row" });
+  row1b.append(
+    field("所在地", textInput(c.addr, v => { c.addr = v; Store.save(); }), true),
+    field("代表者名", textInput(c.rep, v => { c.rep = v; Store.save(); })),
+    field("電話番号", textInput(c.tel || "", v => { c.tel = v; Store.save(); })),
+  );
+  card1.append(row1, row1b);
+
+  const card2 = el("div", { class: "card" }, [el("h3", {}, "健康保険・介護保険・厚生年金保険料率（労使合計・年率）")]);
+  const row2 = el("div", { class: "field-row" });
+  row2.append(
+    field("健康保険料率", pctInput(c.kenpoRate, v => { c.kenpoRate = v; Store.save(); })),
+    field("介護保険料率（40〜64歳該当者のみ）", pctInput(c.kaigoRate, v => { c.kaigoRate = v; Store.save(); })),
+    field("厚生年金保険料率", pctInput(c.kouseiRate, v => { c.kouseiRate = v; Store.save(); })),
+  );
+  card2.append(row2, el("div", { class: "note" },
+    "参考値（令和8年度・全国一律）：介護保険料率 1.62%／厚生年金保険料率 18.300%。健康保険料率は協会けんぽの都道府県、または加入している健康保険組合により異なるため、必ず自社の最新料率に修正してください。"));
+
+  const card3 = el("div", { class: "card" }, [el("h3", {}, "子ども・子育て支援金（令和8年度新設・労使合計）")]);
+  const row3 = el("div", { class: "field-row" });
+  row3.append(
+    field("支援金率", pctInput(c.shienRate, v => { c.shienRate = v; Store.save(); })),
+    field("適用開始年月（YYYYMM）", ymInput(c.shienStart, v => { c.shienStart = v; Store.save(); })),
+  );
+  card3.appendChild(row3);
+  card3.appendChild(el("div", { class: "note" },
+    "参考値：0.23%（令和8年度・被用者保険一律、労使折半）。健康保険料と徴収開始タイミングがずれる場合があるため（当月徴収の会社は4月支給分、翌月徴収の会社は5月支給分からが一般的）、自社の運用に合わせて適用開始年月を調整してください。"));
+
+  const card4 = el("div", { class: "card" }, [el("h3", {}, "雇用保険")]);
+  const row4 = el("div", { class: "field-row" });
+  const koyouChk = checkboxField(c.koyouFlag, v => { c.koyouFlag = v; Store.save(); });
+  row4.append(
+    field("雇用保険 適用の有無（適用事業所か）", koyouChk),
+    field("雇用保険料率（従業員負担分）", pctInput(c.koyouEmpRate, v => { c.koyouEmpRate = v; Store.save(); })),
+    field("雇用保険料率（事業主負担分）", pctInput(c.koyouCoRate, v => { c.koyouCoRate = v; Store.save(); })),
+  );
+  card4.appendChild(row4);
+  card4.appendChild(el("div", { class: "note" },
+    "参考値（令和8年度・一般の事業）：従業員0.50%・事業主0.85%。適用が無い場合はチェックを外すと、月次給与・賞与の雇用保険料が自動的にすべて0円になります（従業員ごとの個別設定は「従業員マスタ」で行えます）。"));
+
+  const card5 = el("div", { class: "card" }, [el("h3", {}, "その他")]);
+  const row5 = el("div", { class: "field-row" });
+  row5.append(
+    field("適用年度", textInput(c.nendo, v => { c.nendo = v; Store.save(); })),
+    field("備考", textInput(c.memo, v => { c.memo = v; Store.save(); }), true),
+  );
+  card5.appendChild(row5);
+
+  main.append(card1, card2, card3, card4, card5);
+}
+
+// ============================================================================
+// 2. 従業員マスタ
+// ============================================================================
+function renderEmployeesPage(main) {
+  const data = Store.get();
+  main.appendChild(pageHead("従業員マスタ",
+    "従業員情報を登録します。標準報酬月額は「標準報酬月額履歴」ページで、定時決定・随時改定などの適用開始年月ごとに管理します。"));
+
+  const toolbar = el("div", { class: "toolbar" });
+  const addBtn = el("button", {
+    class: "btn", onclick: () => {
+      const id = data.nextEmployeeId++;
+      data.employees.push({
+        id, name: "新規従業員", birth: "", hire: "", addr: "",
+        fuyoShinkoku: true, haigusha: false, kaigo: false, koyouKobetsu: true,
+        ippan: 0, tokutei: 0, roujin: 0, doukyo: 0, shougai: 0, nenchoTaisho: true,
+        juminzeiJune: 0, juminzeiOther: 0, memo: "",
+        retired: false, retireLastYm: null,
+      });
+      Store.save();
+      renderPage();
+      flash("従業員を追加しました");
+    }
+  }, "＋ 従業員を追加");
+  toolbar.appendChild(addBtn);
+  main.appendChild(toolbar);
+
+  const wrap = el("div", { class: "tablewrap" });
+  const table = el("table", { class: "datatable" });
+  const thead = el("thead", {}, el("tr", {}, [
+    "ID", "氏名", "生年月日", "入社日", "住所", "扶養控除等\n申告書提出", "配偶者\n(源泉控除対象)",
+    "介護保険\n該当", "雇用保険\n個人適用", "扶養\n(一般)", "扶養\n(特定)", "扶養\n(老人別居)",
+    "同居老親等", "障害者等\n加算", "年末調整\n対象", "住民税\n(6月)", "住民税\n(6月以外)", "備考", "退職処理",
+  ].map(h => el("th", {}, h))));
+  table.appendChild(thead);
+  const tbody = el("tbody");
+
+  data.employees.forEach(emp => {
+    const tr = el("tr");
+    const upd = (k, v) => { emp[k] = v; Store.save(); };
+    const nameCell = el("td", { class: "tleft" });
+    nameCell.appendChild(textInput(emp.name, v => upd("name", v), { minWidth: "160px" }));
+    if (emp.retired) {
+      nameCell.appendChild(el("div", { style: "color:#a33; font-size:11.5px; font-weight:700; margin-top:2px;" }, retireLabelText(emp)));
+    }
+    const retireCell = el("td");
+    if (emp.retired) {
+      retireCell.appendChild(el("button", {
+        class: "btn secondary small", onclick: () => {
+          if (!confirm(`${emp.name} の退職設定を取り消しますか？（通常の在職者に戻します）`)) return;
+          emp.retired = false; emp.retireLastYm = null;
+          Store.save(); renderPage();
+        }
+      }, "退職取消"));
+    } else {
+      retireCell.appendChild(el("button", {
+        class: "btn danger small", onclick: () => {
+          const input = prompt(`${emp.name} を退職処理します。\n最後の給与となる「対象年月」をYYYY-MM形式で入力してください（例：${currentYear}-08）`, "");
+          if (input === null) return;
+          const m = input.trim().match(/^(\d{4})-(\d{1,2})$/);
+          if (!m) { flash(`YYYY-MM形式で入力してください（例：${currentYear}-08）`, true); return; }
+          const y = Number(m[1]), mm = Number(m[2]);
+          if (mm < 1 || mm > 12) { flash("月は1〜12の範囲で入力してください", true); return; }
+          emp.retired = true; emp.retireLastYm = y * 100 + mm;
+          Store.save(); renderPage();
+          flash("退職処理を反映しました");
+        }
+      }, "退職"));
+    }
+    tr.append(
+      el("td", {}, String(emp.id)),
+      nameCell,
+      el("td", {}, dateInput(emp.birth, v => upd("birth", v))),
+      el("td", {}, dateInput(emp.hire, v => upd("hire", v))),
+      el("td", { class: "tleft" }, textInput(emp.addr || "", v => upd("addr", v), { minWidth: "160px" })),
+      el("td", {}, checkboxField(emp.fuyoShinkoku, v => upd("fuyoShinkoku", v))),
+      el("td", {}, checkboxField(emp.haigusha, v => upd("haigusha", v))),
+      el("td", {}, checkboxField(emp.kaigo, v => upd("kaigo", v))),
+      el("td", {}, checkboxField(emp.koyouKobetsu, v => upd("koyouKobetsu", v))),
+      el("td", {}, numInput(emp.ippan, v => upd("ippan", v))),
+      el("td", {}, numInput(emp.tokutei, v => upd("tokutei", v))),
+      el("td", {}, numInput(emp.roujin, v => upd("roujin", v))),
+      el("td", {}, numInput(emp.doukyo, v => upd("doukyo", v))),
+      el("td", {}, numInput(emp.shougai, v => upd("shougai", v))),
+      el("td", {}, checkboxField(emp.nenchoTaisho, v => upd("nenchoTaisho", v))),
+      el("td", {}, moneyInput(emp.juminzeiJune, v => upd("juminzeiJune", v))),
+      el("td", {}, moneyInput(emp.juminzeiOther, v => upd("juminzeiOther", v))),
+      el("td", { class: "tleft" }, textInput(emp.memo, v => upd("memo", v))),
+      retireCell,
+    );
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  main.appendChild(wrap);
+  main.appendChild(el("div", { class: "note" },
+    "扶養親族等の人数は「源泉控除対象」（年間所得の要件を満たす人）の人数を区分ごとに入力します。「扶養控除等申告書提出」のチェックを外すと（乙欄該当者）、月次給与の所得税が乙欄で自動計算されます。「雇用保険 個人適用」のチェックを外すと、役員など雇用保険の被保険者とならない人を個別に除外できます。"));
+  main.appendChild(el("div", { class: "note" },
+    "退職者はデータを削除せず「退職」ボタンで処理します。最後の給与となる対象年月を設定すると、それ以前は通常どおり表示・計算され、それより後の月次給与・賃金台帳・給与明細（対象年月選択時）には表示されなくなります。個人別賃金台帳では、退職者も引き続き選択・印刷できます。"));
+}
+
+// ============================================================================
+// 3. 標準報酬月額履歴
+// ============================================================================
+function renderHyojunPage(main) {
+  const data = Store.get();
+  main.appendChild(pageHead("標準報酬月額履歴",
+    "健康保険・介護保険・厚生年金・子ども子育て支援金の計算に使う標準報酬月額を、定時決定・随時改定などの適用開始年月ごとに記録します。月次給与は、対象年月時点で適用されている最新の標準報酬月額を自動的に探して使用します。"));
+
+  const toolbar = el("div", { class: "toolbar" });
+  toolbar.appendChild(el("button", {
+    class: "btn", onclick: () => {
+      data.hyojunHistory.push({
+        id: data.nextHistId++, empId: 0, startYm: currentYear * 100 + 1,
+        kenpoGaku: 0, kouseiGaku: 0, reason: "定時決定", memo: ""
+      });
+      Store.save(); renderPage();
+    }
+  }, "＋ 履歴を追加"));
+  main.appendChild(toolbar);
+
+  const wrap = el("div", { class: "tablewrap" });
+  const table = el("table", { class: "datatable" });
+  table.appendChild(el("thead", {}, el("tr", {}, [
+    "従業員", "適用開始年月", "標準報酬月額\n(健保・介護・支援金用)",
+    "標準報酬月額\n(厚生年金用)", "改定事由", "備考", "",
+  ].map(h => el("th", {}, h)))));
+  const tbody = el("tbody");
+  const empOptions = [[0, "（未選択）"]].concat(data.employees.map(e => [e.id, `${e.id}: ${employeeDisplayName(e)}`]));
+
+  data.hyojunHistory.forEach(h => {
+    const tr = el("tr");
+    const upd = (k, v) => { h[k] = v; Store.save(); };
+    tr.append(
+      el("td", { class: "tleft" }, selectField(empOptions, h.empId, v => upd("empId", Number(v)))),
+      el("td", {}, monthInputYm(h.startYm, v => upd("startYm", v))),
+      el("td", {}, moneyInput(h.kenpoGaku, v => upd("kenpoGaku", v))),
+      el("td", {}, moneyInput(h.kouseiGaku, v => upd("kouseiGaku", v))),
+      el("td", { class: "tleft" }, selectField(
+        [["資格取得時決定", "資格取得時決定"], ["定時決定", "定時決定"], ["随時改定", "随時改定"], ["その他", "その他"]],
+        h.reason, v => upd("reason", v))),
+      el("td", { class: "tleft" }, textInput(h.memo, v => upd("memo", v))),
+      el("td", {}, el("button", {
+        class: "btn danger small", onclick: () => {
+          data.hyojunHistory = data.hyojunHistory.filter(x => x.id !== h.id);
+          Store.save(); renderPage();
+        }
+      }, "削除")),
+    );
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  main.appendChild(wrap);
+  main.appendChild(el("div", { class: "note" },
+    "同じ従業員で複数回登録した場合、対象年月以前で最も新しい適用開始年月の行が自動的に採用されます。過去の数値を書き換える必要はなく、改定があるたびに新しい行を追加してください。"));
+}
+
+// ============================================================================
+// 4. 月次給与
+// ============================================================================
+let monthlySelectedYm = null;
+
+function renderMonthlyPage(main) {
+  const data = Store.get();
+  // 対象年度がサイドバーで切り替わっていたら、選択中の年月もその年度の1月にリセットする
+  if (monthlySelectedYm === null || Math.floor(monthlySelectedYm / 100) !== currentYear) {
+    monthlySelectedYm = currentYear * 100 + 1;
+  }
+  main.appendChild(pageHead("月次給与",
+    "対象年月を選ぶと、登録済みの全従業員分がその場で表示されます。所得税は「課税総支給額（基本給・諸手当・"
+    + "残業手当・通勤手当の課税分の合計）」から社会保険料等を差し引いた金額をもとに、国税庁「電算機計算の特例」"
+    + "（甲欄・乙欄）にそのまま基づいて自動計算されます。「前月支給額の複写」ボタンを押すと、基本給・"
+    + "諸手当・残業手当・通勤手当（非課税・課税とも）に前月と同じ金額を複写できます（自動では複写されないので、"
+    + "金額が変わる月はそのまま入力し、変わらない月だけ複写ボタンをご利用ください）。"));
+  const warn = calcYearWarningNote();
+  if (warn) main.appendChild(warn);
+
+  const toolbar = el("div", { class: "toolbar" });
+  const monthOptions = [];
+  for (let m = 1; m <= 12; m++) monthOptions.push([currentYear * 100 + m, `${currentYear}年${m}月`]);
+  toolbar.appendChild(field("対象年月", selectField(monthOptions, monthlySelectedYm, v => {
+    monthlySelectedYm = Number(v); renderPage();
+  })));
+  toolbar.appendChild(el("button", { class: "btn secondary", onclick: () => {
+    const ym = monthlySelectedYm;
+    const y = Math.floor(ym / 100), m = ym % 100;
+    const pym = prevYm(ym);
+    const py = Math.floor(pym / 100), pm = pym % 100;
+    const ok = confirm(`前月（${py}年${pm}月）の基本給・諸手当・残業手当・通勤手当（非課税・課税とも）の金額を、${y}年${m}月の全従業員に複写します。\n現在この月に入力済みの値は上書きされます。よろしいですか？`);
+    if (!ok) return;
+    data.employees.forEach(emp => {
+      if (!isEmployeeActiveForYm(emp, ym)) return;
+      const prev = findCarryForward(emp.id, ym);
+      if (prev) {
+        saveMonthlyInput(emp.id, ym, {
+          kihonkyu: prev.kihonkyu, shokate: prev.shokate, zangyo: prev.zangyo,
+          tsukin: prev.tsukin, tsukinKazei: prev.tsukinKazei,
+        });
+      }
+    });
+    renderPage();
+  } }, "📋 前月支給額の複写"));
+  const spacer = el("div", { class: "spacer" });
+  toolbar.appendChild(spacer);
+  main.appendChild(toolbar);
+
+  const wrap = el("div", { class: "tablewrap" });
+  const table = el("table", { class: "datatable" });
+  table.appendChild(el("thead", {}, el("tr", {}, [
+    "氏名", "区分", "基本給", "諸手当", "残業手当", "通勤手当\n(非課税)", "通勤手当\n(課税)",
+    "課税総支給額", "総支給額",
+    "健保", "支援金", "介護", "厚生年金", "雇用保険", "社会保険料等\n控除合計", "社保控除後(A)",
+    "所得税", "住民税", "その他控除", "控除合計", "差引支給額",
+  ].map(h => el("th", {}, h)))));
+  const tbody = el("tbody");
+
+  // 各行・合計行の「計算結果」セルへの参照を保持しておき、入力が変わった時は
+  // このセルの表示だけを直接書き換える（ページ全体を再描画しない）。
+  // ページ全体を再描画すると、入力欄からフォーカスが外れた瞬間にDOMごと作り直されるため、
+  // 「次の人をクリック」しても、そのクリックの相手先がもう無くなっていて反応しない
+  // （もう一度クリックし直す必要がある）という不具合が起きていた。またスクロール位置も崩れていた。
+  const rowRefs = [];
+
+  function updateRowCells(ref) {
+    const row = computeMonthlyRow(ref.emp.id, monthlySelectedYm);
+    ref.td.kazeiSoshikyu.textContent = yen(row.kazeiSoshikyu);
+    ref.td.souShikyu.textContent = yen(row.souShikyu);
+    ref.td.kenpo.textContent = yen(row.kenpo);
+    ref.td.shien.textContent = yen(row.shien);
+    ref.td.kaigo.textContent = yen(row.kaigo);
+    ref.td.kousei.textContent = yen(row.kousei);
+    ref.td.koyou.textContent = yen(row.koyou);
+    ref.td.shahoKei.textContent = yen(row.shahoKei);
+    ref.td.A.textContent = yen(row.A);
+    ref.td.tax.textContent = yen(row.tax);
+    ref.td.juminzei.textContent = yen(row.juminzei);
+    ref.td.koujoKei.textContent = yen(row.koujoKei);
+    ref.td.sashihiki.textContent = yen(row.sashihiki);
+    return row;
+  }
+  function updateTotalsRow() {
+    if (!totalsTd) return;
+    const totals = { kazeiSoshikyu: 0, souShikyu: 0, kenpo: 0, kaigo: 0, kousei: 0, koyou: 0, shien: 0, tax: 0, juminzei: 0, sonota: 0, koujoKei: 0, sashihiki: 0 };
+    rowRefs.forEach(ref => {
+      const row = computeMonthlyRow(ref.emp.id, monthlySelectedYm);
+      totals.kazeiSoshikyu += row.kazeiSoshikyu;
+      totals.souShikyu += row.souShikyu; totals.kenpo += row.kenpo; totals.kaigo += row.kaigo;
+      totals.kousei += row.kousei; totals.koyou += row.koyou; totals.shien += row.shien;
+      totals.tax += row.tax; totals.juminzei += row.juminzei; totals.sonota += (row.input.sonota || 0);
+      totals.koujoKei += row.koujoKei; totals.sashihiki += row.sashihiki;
+    });
+    const totalsShahoKei = totals.kenpo + totals.shien + totals.kaigo + totals.kousei + totals.koyou;
+    totalsTd.kazeiSoshikyu.textContent = yen(totals.kazeiSoshikyu);
+    totalsTd.souShikyu.textContent = yen(totals.souShikyu);
+    totalsTd.kenpo.textContent = yen(totals.kenpo);
+    totalsTd.shien.textContent = yen(totals.shien);
+    totalsTd.kaigo.textContent = yen(totals.kaigo);
+    totalsTd.kousei.textContent = yen(totals.kousei);
+    totalsTd.koyou.textContent = yen(totals.koyou);
+    totalsTd.shahoKei.textContent = yen(totalsShahoKei);
+    totalsTd.tax.textContent = yen(totals.tax);
+    totalsTd.juminzei.textContent = yen(totals.juminzei);
+    totalsTd.sonota.textContent = yen(totals.sonota);
+    totalsTd.koujoKei.textContent = yen(totals.koujoKei);
+    totalsTd.sashihiki.textContent = yen(totals.sashihiki);
+  }
+
+  data.employees.forEach(emp => {
+    if (!isEmployeeActiveForYm(emp, monthlySelectedYm)) return;
+    const row = computeMonthlyRow(emp.id, monthlySelectedYm);
+    const tr = el("tr");
+    const input = row.input;
+    const ref = { emp, td: {} };
+    const saveField = (k, v) => {
+      saveMonthlyInput(emp.id, monthlySelectedYm, { [k]: v });
+      updateRowCells(ref);
+      updateTotalsRow();
+    };
+    ref.td.kazeiSoshikyu = el("td", {}, yen(row.kazeiSoshikyu));
+    ref.td.souShikyu = el("td", {}, yen(row.souShikyu));
+    ref.td.kenpo = el("td", {}, yen(row.kenpo));
+    ref.td.shien = el("td", {}, yen(row.shien));
+    ref.td.kaigo = el("td", {}, yen(row.kaigo));
+    ref.td.kousei = el("td", {}, yen(row.kousei));
+    ref.td.koyou = el("td", {}, yen(row.koyou));
+    ref.td.shahoKei = el("td", {}, yen(row.shahoKei));
+    ref.td.A = el("td", {}, yen(row.A));
+    ref.td.tax = el("td", {}, yen(row.tax));
+    ref.td.juminzei = el("td", {}, yen(row.juminzei));
+    ref.td.koujoKei = el("td", {}, yen(row.koujoKei));
+    ref.td.sashihiki = el("td", {}, yen(row.sashihiki));
+    tr.append(
+      el("td", { class: "tleft" }, emp.name),
+      el("td", {}, el("span", { class: "pill " + (row.isOtsu ? "otsu" : "kou") }, row.isOtsu ? "乙欄" : "甲欄")),
+      el("td", {}, moneyInput(input.kihonkyu, v => saveField("kihonkyu", v))),
+      el("td", {}, moneyInput(input.shokate, v => saveField("shokate", v))),
+      el("td", {}, moneyInput(input.zangyo, v => saveField("zangyo", v))),
+      el("td", {}, moneyInput(input.tsukin, v => saveField("tsukin", v))),
+      el("td", {}, moneyInput(input.tsukinKazei, v => saveField("tsukinKazei", v))),
+      ref.td.kazeiSoshikyu, ref.td.souShikyu, ref.td.kenpo, ref.td.shien, ref.td.kaigo, ref.td.kousei, ref.td.koyou,
+      ref.td.shahoKei, ref.td.A, ref.td.tax, ref.td.juminzei,
+      el("td", {}, moneyInput(input.sonota, v => saveField("sonota", v))),
+      ref.td.koujoKei, ref.td.sashihiki,
+    );
+    tbody.appendChild(tr);
+    rowRefs.push(ref);
+  });
+
+  let totalsTd = null;
+  if (rowRefs.length > 0) {
+    const tr = el("tr", { class: "row-total" });
+    totalsTd = {
+      kazeiSoshikyu: el("td", {}, ""), souShikyu: el("td", {}, ""), kenpo: el("td", {}, ""), shien: el("td", {}, ""),
+      kaigo: el("td", {}, ""), kousei: el("td", {}, ""), koyou: el("td", {}, ""), shahoKei: el("td", {}, ""),
+      tax: el("td", {}, ""), juminzei: el("td", {}, ""), sonota: el("td", {}, ""), koujoKei: el("td", {}, ""), sashihiki: el("td", {}, ""),
+    };
+    tr.append(
+      el("td", { class: "tleft" }, "合計"), el("td", {}, ""),
+      el("td", {}, ""), el("td", {}, ""), el("td", {}, ""), el("td", {}, ""), el("td", {}, ""),
+      totalsTd.kazeiSoshikyu, totalsTd.souShikyu, totalsTd.kenpo, totalsTd.shien, totalsTd.kaigo, totalsTd.kousei, totalsTd.koyou,
+      totalsTd.shahoKei, el("td", {}, ""), totalsTd.tax, totalsTd.juminzei,
+      totalsTd.sonota, totalsTd.koujoKei, totalsTd.sashihiki,
+    );
+    tbody.appendChild(tr);
+    updateTotalsRow();
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  main.appendChild(wrap);
+}
+
+// ============================================================================
+// 5. 賞与計算
+// ============================================================================
+function renderBonusPage(main) {
+  const data = Store.get();
+  main.appendChild(pageHead("賞与計算",
+    `賞与（ボーナス）支給時の源泉徴収税額を計算します（甲欄のみ対応）。前月の給与・社会保険料は、支給日の前月分を「月次給与」のデータから自動的に集計します。表示は対象年度（${reiwaLabel(currentYear)}／${currentYear}年）に支給日が含まれる賞与のみです。`));
+  const warn = calcYearWarningNote();
+  if (warn) main.appendChild(warn);
+
+  const toolbar = el("div", { class: "toolbar" });
+  toolbar.appendChild(el("button", {
+    class: "btn", onclick: () => {
+      const emp = data.employees[0];
+      data.bonus.push({ id: data.nextBonusId++, empId: emp ? emp.id : 0, date: `${currentYear}-06-10`, amount: 0, sonota: 0 });
+      Store.save(); renderPage();
+    }
+  }, "＋ 賞与を追加"));
+  main.appendChild(toolbar);
+
+  const empOptions = data.employees.map(e => [e.id, `${e.id}: ${employeeDisplayName(e)}`]);
+  const wrap = el("div", { class: "tablewrap" });
+  const table = el("table", { class: "datatable" });
+  table.appendChild(el("thead", {}, el("tr", {}, [
+    "従業員", "支給年月日", "区分", "前月給与\n(自動)", "前月社保\n(自動)", "賞与額",
+    "健保", "支援金", "介護", "厚生年金", "雇用保険", "社会保険料等\n控除合計", "社保控除後", "率", "源泉徴収税額", "その他控除", "差引支給額", "",
+  ].map(h => el("th", {}, h)))));
+  const tbody = el("tbody");
+
+  data.bonus.filter(b => b.date && Number(String(b.date).slice(0, 4)) === currentYear).forEach(b => {
+    const row = computeBonusRow(b);
+    const emp = row.emp;
+    const tr = el("tr");
+    const upd = (k, v) => { b[k] = v; Store.save(); renderPage(); };
+    tr.append(
+      el("td", { class: "tleft" }, selectField(empOptions, b.empId, v => upd("empId", Number(v)))),
+      el("td", {}, dateInput(b.date, v => upd("date", v))),
+      el("td", {}, emp ? el("span", { class: "pill " + (row.isOtsu ? "otsu" : "kou") }, row.isOtsu ? "乙欄(非対応)" : "甲欄") : ""),
+      el("td", {}, yen(row.zenGetsuKyuyo)),
+      el("td", {}, yen(row.zenGetsuShaho)),
+      el("td", {}, moneyInput(b.amount, v => upd("amount", v))),
+      el("td", {}, yen(row.kenpo)), el("td", {}, yen(row.shien)), el("td", {}, yen(row.kaigo)), el("td", {}, yen(row.kousei)),
+      el("td", {}, yen(row.koyou)), el("td", {}, yen(row.shahoKei)), el("td", {}, yen(row.afterShaho)),
+      el("td", {}, row.isOtsu ? "―" : pct(row.rate)),
+      el("td", {}, row.isOtsu ? "―" : yen(row.tax)),
+      el("td", {}, moneyInput(b.sonota, v => upd("sonota", v))),
+      el("td", {}, row.isOtsu ? "―" : yen(row.sashihiki)),
+      el("td", {}, el("button", {
+        class: "btn danger small", onclick: () => {
+          data.bonus = data.bonus.filter(x => x.id !== b.id);
+          Store.save(); renderPage();
+        }
+      }, "削除")),
+    );
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  main.appendChild(wrap);
+  main.appendChild(el("div", { class: "note warn" },
+    "扶養控除等申告書を提出していない人（乙欄該当者）の賞与計算には対応していません。該当する場合は税理士等にご確認ください。"));
+}
+
+// ============================================================================
+// 6/7. 給与明細・賞与明細（印刷）
+// ============================================================================
+function buildPaySlipHtml(emp, ym, row, compact = false) {
+  const c = Store.get().company;
+  return `
+    <div class="slip${compact ? " slip-compact" : ""}">
+      <h2>給与明細書</h2>
+      <div class="slip-head">
+        <div>${c.name}<br>${c.addr || ""}</div>
+        <div style="text-align:right">対象年月：${ymLabel(ym)}<br>氏名：${emp.name} 様</div>
+      </div>
+      <table>
+        <tr><th>基本給</th><td>${yen(row.input.kihonkyu)} 円</td></tr>
+        <tr><th>諸手当</th><td>${yen(row.input.shokate)} 円</td></tr>
+        <tr><th>残業手当</th><td>${yen(row.input.zangyo)} 円</td></tr>
+        <tr><th>通勤手当（非課税）</th><td>${yen(row.input.tsukin)} 円</td></tr>
+        <tr><th>通勤手当（課税）</th><td>${yen(row.input.tsukinKazei)} 円</td></tr>
+        <tr><th>課税総支給額</th><td>${yen(row.kazeiSoshikyu)} 円</td></tr>
+        <tr><th>総支給額</th><td>${yen(row.souShikyu)} 円</td></tr>
+        <tr><th>健康保険料</th><td>${yen(row.kenpo)} 円</td></tr>
+        <tr><th>子ども・子育て支援金</th><td>${yen(row.shien)} 円</td></tr>
+        <tr><th>介護保険料</th><td>${yen(row.kaigo)} 円</td></tr>
+        <tr><th>厚生年金保険料</th><td>${yen(row.kousei)} 円</td></tr>
+        <tr><th>雇用保険料</th><td>${yen(row.koyou)} 円</td></tr>
+        <tr><th>社会保険料等控除合計</th><td>${yen(row.shahoKei)} 円</td></tr>
+        <tr><th>所得税（源泉徴収税額）</th><td>${yen(row.tax)} 円</td></tr>
+        <tr><th>住民税（特別徴収）</th><td>${yen(row.juminzei)} 円</td></tr>
+        <tr><th>その他控除</th><td>${yen(row.sonota)} 円</td></tr>
+        <tr><th>控除合計</th><td>${yen(row.koujoKei)} 円</td></tr>
+        <tr class="netpay"><th>差引支給額</th><td>${yen(row.sashihiki)} 円</td></tr>
+      </table>
+    </div>`;
+}
+
+function renderPayslipPage(main) {
+  const data = Store.get();
+  main.appendChild(pageHead("給与明細", `従業員と対象年月を選んで印刷できます（対象年度：${reiwaLabel(currentYear)}／${currentYear}年）。`));
+  const empOptions = data.employees.map(e => [e.id, `${e.id}: ${employeeDisplayName(e)}`]);
+  let selEmp = data.employees[0] ? data.employees[0].id : 0;
+  let selYm = currentYear * 100 + 1;
+
+  const card = el("div", { class: "card" });
+  const preview = el("div", { id: "slipPreviewWrap" });
+  const monthOptions = []; for (let m = 1; m <= 12; m++) monthOptions.push([currentYear * 100 + m, `${currentYear}年${m}月`]);
+
+  function refresh() {
+    const emp = findEmployee(selEmp);
+    if (!emp) { preview.innerHTML = "<p>従業員が登録されていません。</p>"; return; }
+    if (!isEmployeeActiveForYm(emp, selYm)) {
+      preview.innerHTML = `<p>${emp.name} は${retireLabelText(emp)}のため、この対象年月の給与明細はありません。</p>`;
+      document.getElementById("printSlip").innerHTML = "";
+      return;
+    }
+    const row = computeMonthlyRow(selEmp, selYm);
+    preview.innerHTML = buildPaySlipHtml(emp, selYm, row);
+    document.getElementById("printSlip").innerHTML = preview.innerHTML;
+  }
+
+  function printAllForMonth() {
+    const emps = data.employees.filter(e => isEmployeeActiveForYm(e, selYm));
+    if (emps.length === 0) { flash("対象年月に該当する従業員が登録されていません。", true); return; }
+    const htmlList = emps.map(e => buildPaySlipHtml(e, selYm, computeMonthlyRow(e.id, selYm), true));
+    document.getElementById("printSlipBulk").innerHTML = buildBulkSlipPages(htmlList);
+    document.body.classList.add("printing-bulk-slip");
+    window.print();
+    setTimeout(() => document.body.classList.remove("printing-bulk-slip"), 500);
+  }
+
+  const toolbar = el("div", { class: "toolbar" });
+  toolbar.append(
+    field("従業員", selectField(empOptions, selEmp, v => { selEmp = Number(v); refresh(); })),
+    field("対象年月", selectField(monthOptions, selYm, v => { selYm = Number(v); refresh(); })),
+    el("button", { class: "btn", onclick: printSingleSlip }, "🖶 印刷"),
+    el("button", { class: "btn secondary", onclick: printAllForMonth }, "🖶 対象年月の全員印刷（A4に4名・切り取り線付き）"),
+  );
+  card.append(toolbar, preview);
+  main.appendChild(card);
+  main.appendChild(el("div", { class: "note" }, "「全員印刷」はA4用紙1枚に4名分を割り付け、点線を切り取り線として印刷します。"));
+  refresh();
+}
+
+function buildBonusSlipHtml(emp, b, row, compact = false) {
+  const c = Store.get().company;
+  return `
+    <div class="slip${compact ? " slip-compact" : ""}">
+      <h2>賞与明細書</h2>
+      <div class="slip-head">
+        <div>${c.name}<br>${c.addr || ""}</div>
+        <div style="text-align:right">支給年月日：${b.date}<br>氏名：${emp.name} 様</div>
+      </div>
+      <table>
+        <tr><th>賞与額（総支給額）</th><td>${yen(row.amount)} 円</td></tr>
+        <tr><th>健康保険料</th><td>${yen(row.kenpo)} 円</td></tr>
+        <tr><th>子ども・子育て支援金</th><td>${yen(row.shien)} 円</td></tr>
+        <tr><th>介護保険料</th><td>${yen(row.kaigo)} 円</td></tr>
+        <tr><th>厚生年金保険料</th><td>${yen(row.kousei)} 円</td></tr>
+        <tr><th>雇用保険料</th><td>${yen(row.koyou)} 円</td></tr>
+        <tr><th>社会保険料等控除合計</th><td>${yen(row.shahoKei)} 円</td></tr>
+        <tr><th>源泉徴収税額（所得税）</th><td>${row.isOtsu ? "―（乙欄非対応）" : yen(row.tax) + " 円"}</td></tr>
+        <tr><th>その他控除</th><td>${yen(row.sonota)} 円</td></tr>
+        <tr class="netpay"><th>差引支給額</th><td>${row.isOtsu ? "―" : yen(row.sashihiki) + " 円"}</td></tr>
+      </table>
+    </div>`;
+}
+
+function renderBonusslipPage(main) {
+  const data = Store.get();
+  main.appendChild(pageHead("賞与明細", `賞与の支給記録を選んで印刷できます（対象年度：${reiwaLabel(currentYear)}／${currentYear}年）。`));
+  const yearBonus = data.bonus.filter(b => b.date && Number(String(b.date).slice(0, 4)) === currentYear);
+  if (yearBonus.length === 0) {
+    main.appendChild(el("div", { class: "note warn" }, `${reiwaLabel(currentYear)}（${currentYear}年）分の賞与がまだ登録されていません。「賞与計算」ページで登録してください。`));
+    return;
+  }
+  const bonusOptions = yearBonus.map(b => {
+    const emp = findEmployee(b.empId);
+    return [b.id, `${b.date}　${emp ? emp.name : "?"}　${yen(b.amount)}円`];
+  });
+  let selId = yearBonus[0].id;
+  const card = el("div", { class: "card" });
+  const preview = el("div");
+  function refresh() {
+    const b = data.bonus.find(x => x.id === selId);
+    const emp = findEmployee(b.empId);
+    const row = computeBonusRow(b);
+    preview.innerHTML = buildBonusSlipHtml(emp, b, row);
+    document.getElementById("printSlip").innerHTML = preview.innerHTML;
+  }
+  function printAllForDate() {
+    const b = data.bonus.find(x => x.id === selId);
+    const sameDate = data.bonus.filter(x => x.date === b.date);
+    const htmlList = sameDate.map(x => {
+      const e = findEmployee(x.empId);
+      return e ? buildBonusSlipHtml(e, x, computeBonusRow(x), true) : "";
+    }).filter(Boolean);
+    document.getElementById("printSlipBulk").innerHTML = buildBulkSlipPages(htmlList);
+    document.body.classList.add("printing-bulk-slip");
+    window.print();
+    setTimeout(() => document.body.classList.remove("printing-bulk-slip"), 500);
+  }
+  const toolbar = el("div", { class: "toolbar" });
+  toolbar.append(
+    field("賞与記録", selectField(bonusOptions, selId, v => { selId = Number(v); refresh(); }), true),
+    el("button", { class: "btn", onclick: printSingleSlip }, "🖶 印刷"),
+    el("button", { class: "btn secondary", onclick: printAllForDate }, "🖶 同一支給日の全員印刷（A4に4名・切り取り線付き）"),
+  );
+  card.append(toolbar, preview);
+  main.appendChild(card);
+  main.appendChild(el("div", { class: "note" }, "「全員印刷」はA4用紙1枚に4名分を割り付け、点線を切り取り線として印刷します。"));
+  refresh();
+}
+
+// ============================================================================
+// 8. 賃金台帳（月次・全員）
+// ============================================================================
+function renderLedgerPage(main) {
+  const data = Store.get();
+  main.appendChild(pageHead("賃金台帳", `対象年月を選ぶと、全従業員分をまとめて印刷できます（対象年度：${reiwaLabel(currentYear)}／${currentYear}年）。`));
+  const warnL = calcYearWarningNote();
+  if (warnL) main.appendChild(warnL);
+  let selYm = currentYear * 100 + 1;
+  const monthOptions = []; for (let m = 1; m <= 12; m++) monthOptions.push([currentYear * 100 + m, `${currentYear}年${m}月`]);
+
+  const card = el("div", { class: "card" });
+  const preview = el("div");
+
+  function buildLedgerHtml() {
+    let rows = "", totals = {
+      kazeiSoshikyu: 0, souShikyu: 0, kenpo: 0, kaigo: 0, kousei: 0, koyou: 0, shien: 0, tax: 0, juminzei: 0, sonota: 0, koujoKei: 0, sashihiki: 0,
+      kihonkyu: 0, shokate: 0, zangyo: 0, tsukin: 0, tsukinKazei: 0,
+    };
+    data.employees.forEach(emp => {
+      if (!isEmployeeActiveForYm(emp, selYm)) return;
+      const r = computeMonthlyRow(emp.id, selYm);
+      const shahoGokei = r.kenpo + r.shien + r.kaigo + r.kousei + r.koyou;
+      rows += `<tr><td style="text-align:left">${emp.name}</td>
+        <td>${yen(r.input.kihonkyu)}</td><td>${yen(r.input.shokate)}</td><td>${yen(r.input.zangyo)}</td>
+        <td>${yen(r.input.tsukin)}</td><td>${yen(r.input.tsukinKazei)}</td>
+        <td>${yen(r.kazeiSoshikyu)}</td>
+        <td>${yen(r.souShikyu)}</td><td>${yen(r.kenpo)}</td><td>${yen(r.shien)}</td><td>${yen(r.kaigo)}</td><td>${yen(r.kousei)}</td>
+        <td>${yen(r.koyou)}</td><td>${yen(shahoGokei)}</td><td>${yen(r.tax)}</td><td>${yen(r.juminzei)}</td>
+        <td>${yen(r.sonota)}</td><td>${yen(r.koujoKei)}</td><td>${yen(r.sashihiki)}</td></tr>`;
+      totals.kazeiSoshikyu += r.kazeiSoshikyu;
+      totals.souShikyu += r.souShikyu; totals.kenpo += r.kenpo; totals.kaigo += r.kaigo; totals.kousei += r.kousei;
+      totals.koyou += r.koyou; totals.shien += r.shien; totals.tax += r.tax; totals.juminzei += r.juminzei;
+      totals.sonota += (r.input.sonota || 0); totals.koujoKei += r.koujoKei; totals.sashihiki += r.sashihiki;
+      totals.kihonkyu += r.input.kihonkyu || 0; totals.shokate += r.input.shokate || 0; totals.zangyo += r.input.zangyo || 0;
+      totals.tsukin += r.input.tsukin || 0; totals.tsukinKazei += r.input.tsukinKazei || 0;
+    });
+    const totalsShahoGokei = totals.kenpo + totals.shien + totals.kaigo + totals.kousei + totals.koyou;
+    return `<h2>賃金台帳（${ymLabel(selYm)}）</h2>
+      <table><thead><tr><th>氏名</th><th>基本給</th><th>諸手当</th><th>残業手当</th>
+      <th>通勤手当<br>(非課税)</th><th>通勤手当<br>(課税)</th><th>課税総支給額</th>
+      <th>総支給額</th><th>健保</th><th>支援金</th><th>介護</th><th>厚生年金</th><th>雇用保険</th><th>社会保険料等<br>控除合計</th>
+      <th>所得税</th><th>住民税</th><th>その他控除</th><th>控除合計</th><th>差引支給額</th></tr></thead>
+      <tbody>${rows}
+      <tr style="font-weight:bold;background:#eef3f9"><td>合計</td>
+      <td>${yen(totals.kihonkyu)}</td><td>${yen(totals.shokate)}</td><td>${yen(totals.zangyo)}</td>
+      <td>${yen(totals.tsukin)}</td><td>${yen(totals.tsukinKazei)}</td>
+      <td>${yen(totals.kazeiSoshikyu)}</td>
+      <td>${yen(totals.souShikyu)}</td><td>${yen(totals.kenpo)}</td><td>${yen(totals.shien)}</td><td>${yen(totals.kaigo)}</td><td>${yen(totals.kousei)}</td>
+      <td>${yen(totals.koyou)}</td><td>${yen(totalsShahoGokei)}</td><td>${yen(totals.tax)}</td><td>${yen(totals.juminzei)}</td>
+      <td>${yen(totals.sonota)}</td><td>${yen(totals.koujoKei)}</td><td>${yen(totals.sashihiki)}</td></tr>
+      </tbody></table>`;
+  }
+  function refresh() {
+    const html = buildLedgerHtml();
+    preview.innerHTML = `<div class="tablewrap">${html}</div>`;
+    document.getElementById("ledgerPrintArea").innerHTML = html;
+  }
+  const toolbar = el("div", { class: "toolbar" });
+  toolbar.append(
+    field("対象年月", selectField(monthOptions, selYm, v => { selYm = Number(v); refresh(); })),
+    el("button", {
+      class: "btn", onclick: () => {
+        printWithPageStyle("size:A4 landscape; margin:15mm 8mm 8mm 15mm;", "printing-ledger");
+      }
+    }, "🖶 印刷"),
+  );
+  card.append(toolbar, preview);
+  main.appendChild(card);
+  refresh();
+}
+
+// ============================================================================
+// 9. 個人別賃金台帳
+// ============================================================================
+// 個人別賃金台帳用：月次給与でまだ保存（入力・確定）されていない月は、
+// 標準報酬月額が設定されていても保険料等を計算せず、全項目0として扱う。
+// （月次給与ページ側は入力途中でも保険料の目安を表示したいのでcomputeMonthlyRowはそのまま使う）
+function computeMonthlyRowForLedger(empId, yyyymm) {
+  const emp = findEmployee(empId);
+  const hasStored = !!Store.get().monthly[monthKey(empId, yyyymm)];
+  if (emp && isEmployeeActiveForYm(emp, yyyymm) && !hasStored) {
+    return {
+      empty: false, emp,
+      input: { kihonkyu: 0, shokate: 0, zangyo: 0, tsukin: 0, tsukinKazei: 0, sonota: 0 },
+      kazeiSoshikyu: 0, kazeiKyuyoKei: 0, souShikyu: 0,
+      hyojun: { kenpoGaku: 0, kouseiGaku: 0 },
+      kenpo: 0, kaigo: 0, kousei: 0, koyou: 0, shien: 0, shahoKei: 0, A: 0,
+      isOtsu: !emp.fuyoShinkoku, taxDetail: null, tax: 0,
+      juminzei: 0, sonota: 0, koujoKei: 0, sashihiki: 0,
+    };
+  }
+  return computeMonthlyRow(empId, yyyymm);
+}
+function renderAnnualLedgerPage(main) {
+  const data = Store.get();
+  main.appendChild(pageHead("個人別賃金台帳",
+    "従業員と年を選ぶと、1〜12月の給与・賞与をまとめ、上期・下期の小計、賞与は支給日ごとの明細と賞与小計、年間合計を表示します。"));
+  const warnAL = calcYearWarningNote();
+  if (warnAL) main.appendChild(warnAL);
+  let selEmp = data.employees[0] ? data.employees[0].id : 0;
+  let selYear = currentYear;
+  const empOptions = data.employees.map(e => [e.id, `${e.id}: ${employeeDisplayName(e)}`]);
+
+  const card = el("div", { class: "card" });
+  const preview = el("div");
+
+  function sumRange(rows) {
+    const t = {
+      kazeiSoshikyu: 0, souShikyu: 0, kenpo: 0, kaigo: 0, kousei: 0, koyou: 0, shien: 0, tax: 0, juminzei: 0, sonota: 0, koujoKei: 0, sashihiki: 0,
+      input: { kihonkyu: 0, shokate: 0, zangyo: 0, tsukin: 0, tsukinKazei: 0 },
+    };
+    rows.forEach(r => {
+      t.kazeiSoshikyu += r.kazeiSoshikyu;
+      t.souShikyu += r.souShikyu; t.kenpo += r.kenpo; t.kaigo += r.kaigo; t.kousei += r.kousei;
+      t.koyou += r.koyou; t.shien += r.shien; t.tax += r.tax; t.juminzei += r.juminzei;
+      t.sonota += (r.input.sonota || 0); t.koujoKei += r.koujoKei; t.sashihiki += r.sashihiki;
+      t.input.kihonkyu += r.input.kihonkyu || 0; t.input.shokate += r.input.shokate || 0; t.input.zangyo += r.input.zangyo || 0;
+      t.input.tsukin += r.input.tsukin || 0; t.input.tsukinKazei += r.input.tsukinKazei || 0;
+    });
+    return t;
+  }
+  function rowHtml(label, r) {
+    const shahoGokei = r.kenpo + r.shien + r.kaigo + r.kousei + r.koyou;
+    const inp = r.input || { kihonkyu: 0, shokate: 0, zangyo: 0, tsukin: 0, tsukinKazei: 0 };
+    return `<tr><td style="text-align:left">${label}</td>
+      <td>${yen(inp.kihonkyu)}</td><td>${yen(inp.shokate)}</td><td>${yen(inp.zangyo)}</td>
+      <td>${yen(inp.tsukin)}</td><td>${yen(inp.tsukinKazei)}</td>
+      <td>${yen(r.kazeiSoshikyu)}</td><td>${yen(r.souShikyu)}</td><td>${yen(r.kenpo)}</td>
+      <td>${yen(r.shien)}</td><td>${yen(r.kaigo)}</td><td>${yen(r.kousei)}</td><td>${yen(r.koyou)}</td><td>${yen(shahoGokei)}</td>
+      <td>${yen(r.tax)}</td><td>${yen(r.juminzei)}</td><td>${yen(r.sonota || 0)}</td>
+      <td>${yen(r.koujoKei)}</td><td>${yen(r.sashihiki)}</td></tr>`;
+  }
+  // 賞与1件分の明細行（実際の支給年月日つき）。基本給等の内訳は賞与には無いため「－」で表示する。
+  function bonusRowHtml(b, r) {
+    const label = "賞与（" + b.date.replace(/-/g, "/") + " 支給）";
+    const shahoGokei = r.kenpo + r.shien + r.kaigo + r.kousei + r.koyou;
+    const koujo = shahoGokei + (r.tax || 0) + (r.sonota || 0);
+    return `<tr><td style="text-align:left; padding-left:1.5em;">${label}</td>
+      <td>－</td><td>－</td><td>－</td><td>－</td><td>－</td>
+      <td>${yen(r.amount)}</td><td>${yen(r.amount)}</td><td>${yen(r.kenpo)}</td>
+      <td>${yen(r.shien)}</td><td>${yen(r.kaigo)}</td><td>${yen(r.kousei)}</td><td>${yen(r.koyou)}</td><td>${yen(shahoGokei)}</td>
+      <td>${yen(r.tax || 0)}</td><td>${yen(0)}</td><td>${yen(r.sonota || 0)}</td>
+      <td>${yen(koujo)}</td><td>${yen(r.sashihiki || 0)}</td></tr>`;
+  }
+  // 従業員1名・1年分の個人別賃金台帳HTMLを組み立てる（画面表示・単独印刷・全員一括印刷で共用）
+  function buildIndividualLedgerHtml(emp, year) {
+    const monthRows = [];
+    for (let m = 1; m <= 12; m++) monthRows.push(computeMonthlyRowForLedger(emp.id, year * 100 + m));
+    const h1 = sumRange(monthRows.slice(0, 6));
+    const h2 = sumRange(monthRows.slice(6, 12));
+    const bonusList = data.bonus.filter(b => b.empId === emp.id && dateToYyyymm(b.date) >= year * 100 + 1 && dateToYyyymm(b.date) <= year * 100 + 12)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(b => ({ b, r: computeBonusRow(b) }));
+    const bTotal = {
+      kazeiSoshikyu: 0, souShikyu: 0, kenpo: 0, kaigo: 0, kousei: 0, koyou: 0, shien: 0, tax: 0, juminzei: 0, sonota: 0, koujoKei: 0, sashihiki: 0,
+      input: { kihonkyu: 0, shokate: 0, zangyo: 0, tsukin: 0, tsukinKazei: 0 },
+    };
+    bonusList.forEach(({ r }) => {
+      bTotal.souShikyu += r.amount; bTotal.kazeiSoshikyu += r.amount; bTotal.kenpo += r.kenpo; bTotal.kaigo += r.kaigo; bTotal.kousei += r.kousei;
+      bTotal.koyou += r.koyou; bTotal.shien += r.shien; bTotal.tax += (r.tax || 0); bTotal.sonota += (r.sonota || 0);
+      bTotal.koujoKei += r.kenpo + r.kaigo + r.kousei + r.koyou + r.shien + (r.tax || 0) + (r.sonota || 0);
+      bTotal.sashihiki += (r.sashihiki || 0);
+    });
+    const grand = {};
+    for (const k of Object.keys(h1)) {
+      if (k === "input") {
+        grand.input = {};
+        for (const ik of Object.keys(h1.input)) grand.input[ik] = h1.input[ik] + h2.input[ik] + bTotal.input[ik];
+      } else {
+        grand[k] = h1[k] + h2[k] + bTotal[k];
+      }
+    }
+
+    let monthly = "";
+    monthRows.forEach((r, i) => { monthly += rowHtml(`${i + 1}月`, r); });
+    let bonusDetail = "";
+    bonusList.forEach(({ b, r }) => { bonusDetail += bonusRowHtml(b, r); });
+
+    return `<div class="tablewrap"><h3>${employeeDisplayName(emp)}　${year}年分</h3>
+      <table class="datatable"><thead><tr><th>区分</th><th>基本給</th><th>諸手当</th><th>残業手当</th>
+      <th>通勤手当<br>(非課税)</th><th>通勤手当<br>(課税)</th><th>課税総支給額</th><th>総支給額</th><th>健保</th><th>支援金</th><th>介護</th><th>厚生年金</th>
+      <th>雇用保険</th><th>社会保険料等<br>控除合計</th><th>所得税</th><th>住民税</th><th>その他控除</th><th>控除合計</th><th>差引支給額</th></tr></thead>
+      <tbody>
+      ${monthly}
+      <tr class="row-total">${rowHtml("【上期小計：1〜6月】", h1).replace("<tr>", "").replace("</tr>", "")}</tr>
+      <tr class="row-total">${rowHtml("【下期小計：7〜12月】", h2).replace("<tr>", "").replace("</tr>", "")}</tr>
+      ${bonusDetail}
+      <tr class="row-total">${rowHtml("【賞与小計】", bTotal).replace("<tr>", "").replace("</tr>", "")}</tr>
+      <tr class="row-total grand-total">${rowHtml("【合計】", grand).replace("<tr>", "").replace("</tr>", "")}</tr>
+      </tbody></table></div>`;
+  }
+  function refresh() {
+    const emp = findEmployee(selEmp);
+    if (!emp) { preview.innerHTML = "<p>従業員が登録されていません。</p>"; return; }
+    const html = buildIndividualLedgerHtml(emp, selYear);
+    preview.innerHTML = html;
+    document.getElementById("ledgerPrintArea").innerHTML = html;
+  }
+  // 対象年の全従業員（退職者を含む）を1人ずつ改ページしながら一括印刷する
+  function printAllEmployeesForYear() {
+    if (data.employees.length === 0) { flash("従業員が登録されていません。", true); return; }
+    const html = data.employees.map(e => `<div style="page-break-after:always;">${buildIndividualLedgerHtml(e, selYear)}</div>`).join("");
+    document.getElementById("ledgerPrintArea").innerHTML = html;
+    printWithPageStyle("size:A4 landscape; margin:15mm 8mm 8mm 15mm;", "printing-ledger");
+  }
+  const toolbar = el("div", { class: "toolbar" });
+  toolbar.append(
+    field("従業員", selectField(empOptions, selEmp, v => { selEmp = Number(v); refresh(); })),
+    yearDisplayField(),
+    el("button", {
+      class: "btn", onclick: () => {
+        printWithPageStyle("size:A4 landscape; margin:15mm 8mm 8mm 15mm;", "printing-ledger");
+      }
+    }, "🖶 印刷"),
+    el("button", { class: "btn secondary", onclick: printAllEmployeesForYear }, "🖶 対象年の全員印刷（退職者含む）"),
+  );
+  card.append(toolbar, preview);
+  main.appendChild(card);
+  refresh();
+}
+
+// ============================================================================
+// 10. 年末調整
+// ============================================================================
+function renderNenchoPage(main) {
+  const data = Store.get();
+  main.appendChild(pageHead("年末調整",
+    "税制改正の確定値（基礎控除・給与所得控除の引上げ等）を反映して、1年分の所得税を精算します。"));
+  const warnN = calcYearWarningNote();
+  if (warnN) main.appendChild(warnN);
+  const empOptions = data.employees.map(e => [e.id, `${e.id}: ${employeeDisplayName(e)}`]);
+  let selEmp = data.employees[0] ? data.employees[0].id : 0;
+  let selYear = currentYear;
+
+  const card = el("div", { class: "card" });
+  const body = el("div");
+
+  function refresh() {
+    const emp = findEmployee(selEmp);
+    if (!emp) { body.innerHTML = "<p>従業員が登録されていません。</p>"; return; }
+    const key = nenchoKey(selEmp, selYear);
+    const inputs = data.nenchoInputs[key] || { seimeihoken: 0, jutaku: 0, shougaiTouGaku: 0, jishinHoken: 0, tokuteiShinzoku: 0 };
+    data.nenchoInputs[key] = inputs;
+    const r = computeNencho(selEmp, selYear);
+
+    body.innerHTML = "";
+
+    if (!emp.fuyoShinkoku) {
+      body.appendChild(el("div", { class: "note warn" },
+        "この従業員は「扶養控除等申告書」を提出していない乙欄該当者のため、当社での年末調整の対象外です"
+        + "（乙欄適用者は、他の主たる給与の勤務先で年末調整を受けるか、ご自身で確定申告を行います）。"
+        + "参考として、実際に支払った給与収入・社会保険料・源泉徴収税額の実額のみを表示します。"));
+      const kv = el("div", { class: "kv" });
+      [
+        ["①年間給与収入合計", yen(r.kyuyoShunyu)],
+        ["②年間社会保険料控除額合計", yen(r.shahoKei)],
+        ["③年間源泉徴収税額合計（既徴収）", yen(r.genzeiKei)],
+      ].forEach(([k, v]) => {
+        kv.appendChild(el("div", { class: "k" }, k));
+        kv.appendChild(el("div", {}, v + " 円"));
+      });
+      body.appendChild(kv);
+      body.appendChild(el("div", { class: "note", style: "margin-top:16px;font-size:15px;font-weight:700" },
+        "⑲差引過不足額：乙欄適用の為年末調整対象外"));
+      return;
+    }
+
+    const kv = el("div", { class: "kv" });
+    const rows = [
+      ["①年間給与収入合計", yen(r.kyuyoShunyu)],
+      ["②年間社会保険料控除額合計", yen(r.shahoKei)],
+      ["③年間源泉徴収税額合計（既徴収）", yen(r.genzeiKei)],
+      ["④給与所得控除額", yen(r.kyuyoKoujo)],
+      ["⑤給与所得金額", yen(r.kyuyoShotoku)],
+      ["⑥配偶者控除額", yen(r.haiguKoujo)],
+      ["⑦扶養控除額", yen(r.fuyouKoujo)],
+      ["⑨基礎控除額", yen(r.kisoKoujo)],
+      ["⑬所得控除合計", yen(r.shotokuKoujoKei)],
+      ["⑭課税所得金額", yen(r.kazeiShotoku)],
+      ["⑮算出所得税額", yen(r.sanshutsuZeigaku)],
+      ["⑰年調所得税額", yen(r.nenchoShotokuZeigaku)],
+      ["⑱年調年税額", yen(r.nenchoNenzeigaku)],
+    ];
+    rows.forEach(([k, v]) => {
+      kv.appendChild(el("div", { class: "k" }, k));
+      kv.appendChild(el("div", {}, v + " 円"));
+    });
+    body.appendChild(kv);
+
+    const kabusokuLabel = r.kabusoku >= 0 ? "還付" : "追加徴収";
+    body.appendChild(el("div", { class: "note", style: "margin-top:16px;font-size:15px;font-weight:700" },
+      `⑲差引過不足額：${yen(Math.abs(r.kabusoku))} 円（${kabusokuLabel}）`));
+
+    const inputCard = el("div", { class: "field-row" });
+    inputCard.append(
+      field("⑧障害者・寡婦・ひとり親・勤労学生控除額（入力）", numInput(inputs.shougaiTouGaku, v => { inputs.shougaiTouGaku = v; Store.save(); refresh(); })),
+      field("⑩生命保険料控除等（入力）", numInput(inputs.seimeihoken, v => { inputs.seimeihoken = v; Store.save(); refresh(); })),
+      field("⑪地震保険料の控除額（入力）", numInput(inputs.jishinHoken, v => { inputs.jishinHoken = v; Store.save(); refresh(); })),
+      field("⑫特定親族特別控除の額（入力）", numInput(inputs.tokuteiShinzoku, v => { inputs.tokuteiShinzoku = v; Store.save(); refresh(); })),
+      field("⑯住宅借入金等特別控除（税額控除・入力）", numInput(inputs.jutaku, v => { inputs.jutaku = v; Store.save(); refresh(); })),
+    );
+    body.appendChild(el("h3", { style: "margin-top:20px" }, "追加の控除入力"));
+    body.appendChild(inputCard);
+  }
+  const toolbar = el("div", { class: "toolbar" });
+  toolbar.append(
+    field("従業員", selectField(empOptions, selEmp, v => { selEmp = Number(v); refresh(); })),
+    yearDisplayField(),
+  );
+  card.append(toolbar, body);
+  main.appendChild(card);
+  refresh();
+  main.appendChild(el("div", { class: "note" },
+    "⑥配偶者控除額は一般（38万円）を自動適用しています。配偶者が70歳以上や配偶者特別控除に該当する場合は、税理士等にご確認のうえ調整してください。合計所得金額は給与所得のみと仮定しています。"));
+}
+
+// ============================================================================
+// 10.5 源泉徴収票
+// ============================================================================
+// 従業員1名・1年分の「給与所得の源泉徴収票」HTMLを組み立てる（画面表示・単独印刷・全員一括印刷で共用）。
+// 年末調整の計算結果（computeNencho）をそのまま転記する。国税庁の正式様式そのものではなく、
+// 記載すべき主要項目をまとめた簡易様式。
+function buildGensenHtml(emp, year) {
+  const company = Store.get().company;
+  const r = computeNencho(emp.id, year);
+  const otsu = !emp.fuyoShinkoku;
+  const dep = { ippan: emp.ippan || 0, tokutei: emp.tokutei || 0, roujin: emp.roujin || 0, doukyo: emp.doukyo || 0 };
+  const depTotal = dep.ippan + dep.tokutei + dep.roujin + dep.doukyo;
+
+  let chuto = "";
+  if (emp.hire && dateToYyyymm(emp.hire) >= year * 100 + 1 && dateToYyyymm(emp.hire) <= year * 100 + 12) {
+    chuto += `就職　${emp.hire.replace(/-/g, "/")}　`;
+  }
+  if (emp.retired && emp.retireLastYm && Math.floor(emp.retireLastYm / 100) === year) {
+    const rm = emp.retireLastYm % 100;
+    chuto += `退職　${year}年${rm}月分給与まで`;
+  }
+
+  const middleRows = otsu
+    ? `<tr>
+        <td class="lbl">給与所得控除後の金額</td><td class="num">－</td>
+        <td class="lbl">所得控除の額の合計額</td><td class="num">－</td>
+        <td class="lbl">控除対象配偶者の有無等</td><td>－</td>
+      </tr>
+      <tr>
+        <td class="lbl" colspan="2">控除対象扶養親族の数（配偶者を除く）</td>
+        <td colspan="4">乙欄適用のため当社では年末調整を行っていません（他の主たる給与の勤務先での年末調整、またはご自身の確定申告によります）。</td>
+      </tr>
+      <tr>
+        <td class="lbl">社会保険料等の金額</td><td class="num">${yen(r.shahoKei)}</td>
+        <td class="lbl">生命保険料の控除額</td><td class="num">－</td>
+        <td class="lbl">住宅借入金等特別控除の額</td><td class="num">－</td>
+      </tr>
+      <tr>
+        <td class="lbl">地震保険料の控除額</td><td class="num">－</td>
+        <td class="lbl">特定親族特別控除の額</td><td class="num">－</td>
+        <td class="lbl"></td><td></td>
+      </tr>`
+    : `<tr>
+        <td class="lbl">給与所得控除後の金額</td><td class="num">${yen(r.kyuyoShotoku)}</td>
+        <td class="lbl">所得控除の額の合計額</td><td class="num">${yen(r.shotokuKoujoKei)}</td>
+        <td class="lbl">控除対象配偶者の有無等</td><td>${emp.haigusha ? "有" : "無"}</td>
+      </tr>
+      <tr>
+        <td class="lbl" colspan="2">控除対象扶養親族の数（配偶者を除く）</td>
+        <td colspan="4">特定：${dep.tokutei}人　老人（同居）：${dep.doukyo}人　老人（別居）：${dep.roujin}人　一般：${dep.ippan}人　合計：${depTotal}人</td>
+      </tr>
+      <tr>
+        <td class="lbl">社会保険料等の金額</td><td class="num">${yen(r.shahoKei)}</td>
+        <td class="lbl">生命保険料の控除額</td><td class="num">${yen(r.seimeihoken)}</td>
+        <td class="lbl">住宅借入金等特別控除の額</td><td class="num">${yen(r.jutaku)}</td>
+      </tr>
+      <tr>
+        <td class="lbl">地震保険料の控除額</td><td class="num">${yen(r.jishinHoken)}</td>
+        <td class="lbl">特定親族特別控除の額</td><td class="num">${yen(r.tokuteiShinzoku)}</td>
+        <td class="lbl"></td><td></td>
+      </tr>`;
+
+  return `
+  <div class="gensen">
+    <div class="gensen-title">${year}年分　給与所得の源泉徴収票</div>
+    <table class="gensen-table">
+      <tr>
+        <td class="lbl" style="width:16%">支払を受ける者<br>住所又は居所</td>
+        <td colspan="3">${emp.addr || ""}</td>
+        <td class="lbl" style="width:8%">氏名</td>
+        <td>${emp.name || ""}</td>
+      </tr>
+      <tr>
+        <td class="lbl">種別</td><td>給与・賞与</td>
+        <td class="lbl">支払金額</td><td class="num">${yen(r.kyuyoShunyu)}</td>
+        <td class="lbl">源泉徴収税額</td><td class="num">${yen(otsu ? r.genzeiKei : r.nenchoNenzeigaku)}</td>
+      </tr>
+      ${middleRows}
+      <tr>
+        <td class="lbl">（摘要）</td>
+        <td colspan="5">${chuto || "－"}</td>
+      </tr>
+    </table>
+    <table class="gensen-table" style="margin-top:6px;">
+      <tr>
+        <td class="lbl" style="width:16%">支払者</td>
+        <td>
+          所在地：${company.addr || ""}<br>
+          氏名又は名称：${company.name || ""}（代表者：${company.rep || ""}）<br>
+          法人番号：${company.hojin || ""}
+        </td>
+      </tr>
+    </table>
+  </div>`;
+}
+
+function renderGensenPage(main) {
+  const data = Store.get();
+  main.appendChild(pageHead("源泉徴収票",
+    "年末調整（甲欄適用者）または実際の支払・徴収額（乙欄該当者）をもとに、給与所得の源泉徴収票を作成・印刷します。"));
+  const warnG = calcYearWarningNote();
+  if (warnG) main.appendChild(warnG);
+  const empOptions = data.employees.map(e => [e.id, `${e.id}: ${employeeDisplayName(e)}`]);
+  let selEmp = data.employees[0] ? data.employees[0].id : 0;
+  let selYear = currentYear;
+
+  const card = el("div", { class: "card" });
+  const preview = el("div");
+
+  function refresh() {
+    const emp = findEmployee(selEmp);
+    if (!emp) { preview.innerHTML = "<p>従業員が登録されていません。</p>"; return; }
+    const html = buildGensenHtml(emp, selYear);
+    preview.innerHTML = html;
+    document.getElementById("ledgerPrintArea").innerHTML = html;
+  }
+  // 対象年の全従業員（退職者を含む）を1人ずつ改ページしながら一括印刷する
+  function printAllEmployeesForYear() {
+    if (data.employees.length === 0) { flash("従業員が登録されていません。", true); return; }
+    const html = data.employees.map(e => `<div style="page-break-after:always;">${buildGensenHtml(e, selYear)}</div>`).join("");
+    document.getElementById("ledgerPrintArea").innerHTML = html;
+    printWithPageStyle("size:A4; margin:15mm;", "printing-ledger");
+  }
+  const toolbar = el("div", { class: "toolbar" });
+  toolbar.append(
+    field("従業員", selectField(empOptions, selEmp, v => { selEmp = Number(v); refresh(); })),
+    yearDisplayField(),
+    el("button", { class: "btn", onclick: () => printWithPageStyle("size:A4; margin:15mm;", "printing-ledger") }, "🖶 印刷"),
+    el("button", { class: "btn secondary", onclick: printAllEmployeesForYear }, "🖶 対象年の全員印刷（退職者含む）"),
+  );
+  card.append(toolbar, preview);
+  main.appendChild(card);
+  refresh();
+  main.appendChild(el("div", { class: "note" },
+    "国税庁の正式な様式そのものではなく、記載すべき主要項目を簡易的にまとめたものです。正式な提出用紙が必要な場合は、国税庁の様式にこの内容を転記してご利用ください。配偶者特別控除など一部の細かい項目は年末調整ページと同様、簡易対応です。"));
+}
+
+// ============================================================================
+// 10.6 源泉徴収票（開発中：国税庁様式のボックス構成に近づけた試作版）
+// ============================================================================
+// 追加入力（gensenExtra）を取得。まだ保存されていなければ空のデフォルト値で初期化する。
+function getGensenExtra(empId, year) {
+  const data = Store.get();
+  if (!data.gensenExtra) data.gensenExtra = {};
+  const key = nenchoKey(empId, year);
+  if (!data.gensenExtra[key]) {
+    data.gensenExtra[key] = {
+      kana: "", myNumber: "", addr: "", yakushokumei: "",
+      tokuteiShinzokuNinzu: 0, fuyou16Ninzu: 0, shougaiTokubetsu: 0, shougaiSonota: 0, hikyojuninzu: 0,
+      shibouTaishoku: false, saigaisha: false, honninShougai: false, kafu: false, hitorioya: false,
+      kinrouGakusei: false, miseinen: false, gaikokujin: false,
+      haigushaShotoku: 0, kokuminNenkin: 0, kyuuChoukiSongai: 0,
+      seimeiShin: 0, seimeiKyu: 0, kaigoIryo: 0, kojinShin: 0, kojinKyu: 0,
+      jutakuMemo: "", seiriran: "", tekiyouExtra: "",
+    };
+  }
+  const ex = data.gensenExtra[key];
+  // 控除対象扶養親族等・16歳未満扶養親族：氏名・個人番号・区分を人数分（4人まで）構造化して持つ。
+  // 以前の自由記入欄（fuyouNameList／fuyou16NameList）しか無い古いデータでも動くよう、
+  // 無ければここで4人分の配列を補って初期化する（1人目に旧の自由記入テキストを引き継ぐ）。
+  if (!Array.isArray(ex.fuyouList)) {
+    ex.fuyouList = [0, 1, 2, 3].map(i => ({ name: i === 0 ? (ex.fuyouNameList || "") : "", kojin: "", kubun: "" }));
+  }
+  if (!Array.isArray(ex.fuyou16List)) {
+    ex.fuyou16List = [0, 1, 2, 3].map(i => ({ name: i === 0 ? (ex.fuyou16NameList || "") : "", kojin: "", kubun: "" }));
+  }
+  return ex;
+}
+// 「追加入力」フォーム用：ex[listKey]（4人分の配列）の氏名・個人番号・区分入力欄を組み立てる
+function famPersonRows(ex, listKey, updPerson) {
+  return ex[listKey].map((p, i) => el("div", { class: "field-row" }, [
+    field(`${i + 1}人目・氏名（フリガナ可）`, textInput(p.name, v => updPerson(listKey, i, "name", v))),
+    field(`${i + 1}人目・個人番号`, textInput(p.kojin, v => updPerson(listKey, i, "kojin", v))),
+    field(`${i + 1}人目・区分`, textInput(p.kubun, v => updPerson(listKey, i, "kubun", v))),
+  ]));
+}
+// ============================================================================
+// 国税庁「【入力用】給与所得の源泉徴収票」PDFへの自動入力（pdf-lib使用）
+// ============================================================================
+// アプリのデータから、実際のPDF（入力用）のフィールド名に対応する値を組み立てる。
+// フィールド名は国税庁PDF（r07/02.pdf）を実際に開いて確認したもの。
+// text=文字入力欄, choice=選択式（〇を選ぶ、または元号のプルダウン）欄。
+// 分からない・対応データを持たない欄（住所の詳細な内訳、住宅ローンの回次別内訳、
+// 扶養親族等の区分コードで一致しないものなど）はここに含めず、PDF上で手入力してもらう。
+function buildGensenPdfData(emp, year) {
+  const r = computeNencho(emp.id, year);
+  const ex = getGensenExtra(emp.id, year);
+  const company = Store.get().company;
+  const otsu = !emp.fuyoShinkoku;
+  const roujinKei = (emp.roujin || 0) + (emp.doukyo || 0);
+  const yen0 = n => { n = Math.round(n || 0); return n ? String(n) : ""; };
+
+  let shushokuYmd = null, taishokuYmd = null;
+  if (emp.hire && dateToYyyymm(emp.hire) >= year * 100 + 1 && dateToYyyymm(emp.hire) <= year * 100 + 12) {
+    const [yy, mm, dd] = emp.hire.split("-").map(Number);
+    shushokuYmd = { y: yy, m: mm, d: dd };
+  }
+  if (emp.retired && emp.retireLastYm && Math.floor(emp.retireLastYm / 100) === year) {
+    const mm = emp.retireLastYm % 100;
+    taishokuYmd = { y: year, m: mm, d: new Date(year, mm, 0).getDate() }; // 対象月の末日で近似
+  }
+
+  const text = {
+    "住 所 又 は 居 所": emp.addr || "", // 従業員マスタの住所を使用
+    "役職名": ex.yakushokumei || "",
+    "氏名フリガナ": ex.kana || "",
+    "氏名": emp.name || "",
+    "種別": "給与・賞与",
+    "fill_99": yen0(r.kyuyoShunyu), // 支払金額（PDF上でラベルの無い自動生成フィールド名）
+    "給与所得控除後の金額": otsu ? "" : yen0(r.kyuyoShotoku),
+    "所得控除の額の合計": otsu ? "" : yen0(r.shotokuKoujoKei),
+    "源泉徴収税額": yen0(otsu ? r.genzeiKei : r.nenchoNenzeigaku),
+    "配偶者（特別）控除の額": otsu ? "" : yen0(r.haiguKoujo),
+    "支払者住所（居所） 又は所在地": company.addr || "",
+    "支払者氏名又は名称": company.name || "",
+    "支払者\u3000電話": company.tel || "",
+    "控除対象数（特定）": emp.tokutei ? String(emp.tokutei) : "",
+    "控除対象数（老人）": roujinKei ? String(roujinKei) : "",
+    "控除対象数（老人内）": emp.doukyo ? String(emp.doukyo) : "",
+    "控除対象数（その他）": emp.ippan ? String(emp.ippan) : "",
+    "16歳未満の扶養親族": ex.fuyou16Ninzu ? String(ex.fuyou16Ninzu) : "",
+    "控除対象数（特親）": ex.tokuteiShinzokuNinzu ? String(ex.tokuteiShinzokuNinzu) : "",
+    "障害者数(特）": ex.shougaiTokubetsu ? String(ex.shougaiTokubetsu) : "",
+    "障害者数他）": ex.shougaiSonota ? String(ex.shougaiSonota) : "",
+    "非居住者親族": ex.hikyojuninzu ? String(ex.hikyojuninzu) : "",
+    "特定親族特別控除の額": otsu ? "" : yen0(r.tokuteiShinzoku),
+    "生命保険料の控除額": otsu ? "" : yen0(r.seimeihoken),
+    "地震保険料の控除額": otsu ? "" : yen0(r.jishinHoken),
+    "住宅借入金等特別控除の額": otsu ? "" : yen0(r.jutaku),
+    "社会保険料等の金額": yen0(r.shahoKei),
+    "（摘要）": ex.tekiyouExtra || "",
+    "新生命保険料の金額": yen0(ex.seimeiShin),
+    "旧生命保険料の金額": yen0(ex.seimeiKyu),
+    "介護医療保険料の金額": yen0(ex.kaigoIryo),
+    "新個人年金保険料の金額": yen0(ex.kojinShin),
+    "旧個人年金保険料の金額": yen0(ex.kojinKyu),
+    "控除対象配偶者合計所得": yen0(ex.haigushaShotoku),
+    "国民年金保険料等の金額": yen0(ex.kokuminNenkin),
+    "基礎控除の額": otsu ? "" : yen0(r.kisoKoujo),
+    "旧長期損害保険料等の金額": yen0(ex.kyuuChoukiSongai),
+    "個人番号": ex.myNumber || "", // 税務署提出用側のみの欄。個人番号02（受給者交付用）は様式どおり空欄のまま。
+    "令和年": String(year - 2018),
+  };
+  ex.fuyouList.forEach((p, i) => {
+    text[`控除対象扶養親族${i + 1}氏名`] = p.name || "";
+    text[`控除対象扶養親族${i + 1}個人番号`] = p.kojin || "";
+  });
+  ex.fuyou16List.forEach((p, i) => {
+    text[`16歳未満の扶養親族${i + 1}氏名`] = p.name || "";
+  });
+  const dateSrc = taishokuYmd || shushokuYmd; // 同一年に両方ある場合は退職を優先（摘要欄で補足してください）
+  if (dateSrc) {
+    text["中途就退職年"] = String(dateSrc.y);
+    text["中途就退職月"] = String(dateSrc.m);
+    text["中途就退職日"] = String(dateSrc.d);
+  }
+
+  const choice = {};
+  if (otsu) choice["005"] = "〇"; // 乙欄
+  if (ex.miseinen) choice["001"] = "〇";
+  if (ex.gaikokujin) choice["002"] = "〇";
+  if (ex.shibouTaishoku) choice["003"] = "〇";
+  if (ex.saigaisha) choice["004"] = "〇";
+  if (ex.kafu) choice["009"] = "〇";
+  if (ex.hitorioya) choice["010"] = "〇";
+  if (ex.kinrouGakusei) choice["011"] = "〇";
+  if (taishokuYmd) choice["013"] = "〇"; // 退職
+  else if (shushokuYmd) choice["012"] = "〇"; // 就職
+  if (emp.haigusha) choice["控除対象配偶者の有無"] = "〇";
+  if (emp.birth) {
+    const [by, bm, bd] = emp.birth.split("-").map(Number);
+    const ymd = by * 10000 + bm * 100 + bd;
+    let era, ey;
+    if (ymd >= 20190501) { era = "\u3000令和"; ey = by - 2018; }
+    else if (ymd >= 19890108) { era = "\u3000平成"; ey = by - 1988; }
+    else if (ymd >= 19261225) { era = "\u3000昭和"; ey = by - 1925; }
+    else if (ymd >= 19120730) { era = "\u3000大正"; ey = by - 1911; }
+    else { era = "\u3000明治"; ey = by - 1867; }
+    choice["元号"] = era;
+    text["受給者生年"] = String(ey);
+    text["受給者生月"] = String(bm);
+    text["受給者生日"] = String(bd);
+  }
+  // 扶養親族の区分は国税庁のコード表（01/02/03/04/10〜91）と一致する場合のみ反映する。
+  // 一致しなければ何もしない＝PDF側で手入力してもらう（誤ったコードを埋めるリスクを避けるため）。
+  ex.fuyouList.forEach((p, i) => { if (p.kubun) choice[`区分${i + 1}`] = p.kubun; });
+  ex.fuyou16List.forEach((p, i) => { if (p.kubun) choice[`16歳未満区分${["１", "２", "３", "４"][i]}`] = "〇"; });
+
+  return { text, choice };
+}
+
+// 選んだPDFファイルにアプリのデータを自動入力し、ダウンロードさせる
+// Pyodide（ブラウザ内で本物のPythonを動かす仕組み）を初回利用時にだけ読み込み、
+// pypdf（PythonのPDFライブラリ。日本語のフィールド値もエラーなく書き込める）をインストールする。
+// 2回目以降の利用ではこのPromiseを使い回すので、再読み込みは発生しない。
+let pyodideReadyPromise = null;
+function getPyodideWithPypdf() {
+  if (!pyodideReadyPromise) {
+    pyodideReadyPromise = (async () => {
+      const pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.3/full/" });
+      await pyodide.loadPackage("micropip");
+      const micropip = pyodide.pyimport("micropip");
+      await micropip.install("pypdf");
+      return pyodide;
+    })();
+  }
+  return pyodideReadyPromise;
+}
+
+async function fillGensenPdfFile(file, emp, year, onStatus) {
+  const { text, choice } = buildGensenPdfData(emp, year);
+  const fieldsToSet = {};
+  for (const [k, v] of Object.entries(Object.assign({}, text, choice))) {
+    if (v) fieldsToSet[k] = String(v);
+  }
+
+  if (onStatus) onStatus("Python環境を準備しています（初回のみ数十秒かかります）…");
+  const pyodide = await getPyodideWithPypdf();
+
+  if (onStatus) onStatus("PDFに書き込んでいます…");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  pyodide.FS.writeFile("/tmp/gensen_input.pdf", bytes);
+  pyodide.globals.set("gensen_fields_json", JSON.stringify(fieldsToSet));
+
+  const resultJson = await pyodide.runPythonAsync(`
+import json
+from pypdf import PdfReader, PdfWriter
+
+reader = PdfReader("/tmp/gensen_input.pdf")
+if reader.is_encrypted:
+    reader.decrypt("")  # 国税庁配布PDFは空パスワードの暗号化がかかっているため解除
+writer = PdfWriter()
+writer.append(reader, pages=[0])  # 1枚目（本体）のみ。2枚目以降の解説ページは含めない
+writer.set_need_appearances_writer(True)
+
+fields = json.loads(gensen_fields_json)
+
+# PDF内に実在するフィールド名だけに絞る（存在しない名前を渡すとpypdfが例外を出すため）
+existing_names = set()
+for page in writer.pages:
+    annots = page.get("/Annots")
+    if not annots:
+        continue
+    for a in annots:
+        obj = a.get_object()
+        name = obj.get("/T")
+        parent = obj.get("/Parent")
+        if name is None and parent is not None:
+            parent_obj = parent.get_object()
+            name = parent_obj.get("/T")
+        if name:
+            existing_names.add(str(name))
+
+applicable = {k: v for k, v in fields.items() if k in existing_names}
+skipped = len(fields) - len(applicable)
+
+for page in writer.pages:
+    try:
+        writer.update_page_form_field_values(page, applicable)
+    except Exception:
+        pass
+
+with open("/tmp/gensen_output.pdf", "wb") as f:
+    writer.write(f)
+
+json.dumps({"filled": len(applicable), "skipped": skipped})
+`);
+  const result = JSON.parse(resultJson);
+  const outBytes = pyodide.FS.readFile("/tmp/gensen_output.pdf");
+
+  const blob = new Blob([outBytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `源泉徴収票_${emp.name}_${year}.pdf`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  flash(`PDFに${result.filled}項目を自動入力しました（未対応の${result.skipped}項目は空欄のままです）。ダウンロードしたPDFを開いて、残りの項目を直接入力してください。`);
+}
+function renderGensen2Page(main) {
+  const data = Store.get();
+  main.appendChild(pageHead("源泉徴収票（開発中）",
+    "国税庁の「【入力用】給与所得の源泉徴収票」PDFに、アプリで計算・入力済みのデータを自動入力する機能です。従業員と対象年を選び、必要なら下の「追加入力」欄も埋めてから、国税庁PDFを選択して自動入力してください。"));
+  const warnG2 = calcYearWarningNote();
+  if (warnG2) main.appendChild(warnG2);
+  const empOptions = data.employees.map(e => [e.id, `${e.id}: ${employeeDisplayName(e)}`]);
+  let selEmp = data.employees[0] ? data.employees[0].id : 0;
+  let selYear = currentYear;
+
+  const selectCard = el("div", { class: "card" });
+  const extraCard = el("div", { class: "card" });
+
+  function refreshExtraForm() {
+    extraCard.innerHTML = "";
+    const emp = findEmployee(selEmp);
+    if (!emp) return;
+    const ex = getGensenExtra(selEmp, selYear);
+    const upd = (k, v) => { ex[k] = v; Store.save(); };
+    const updPerson = (listKey, idx, k, v) => { ex[listKey][idx][k] = v; Store.save(); };
+    extraCard.appendChild(el("h3", {}, "追加入力（正式様式用・任意）"));
+    const rows = [
+      el("div", { class: "field-row" }, [
+        field("フリガナ", textInput(ex.kana, v => upd("kana", v))),
+        field("役職名", textInput(ex.yakushokumei, v => upd("yakushokumei", v))),
+        field("個人番号", textInput(ex.myNumber, v => upd("myNumber", v))),
+      ]),
+      el("div", { class: "field-row" }, [
+        field("特親（特定親族）の人数", numInput(ex.tokuteiShinzokuNinzu, v => upd("tokuteiShinzokuNinzu", v))),
+        field("16歳未満扶養親族の人数", numInput(ex.fuyou16Ninzu, v => upd("fuyou16Ninzu", v))),
+        field("障害者の数（特別）", numInput(ex.shougaiTokubetsu, v => upd("shougaiTokubetsu", v))),
+        field("障害者の数（その他）", numInput(ex.shougaiSonota, v => upd("shougaiSonota", v))),
+        field("非居住者である親族の数", numInput(ex.hikyojuninzu, v => upd("hikyojuninzu", v))),
+      ]),
+      el("h4", {}, "控除対象扶養親族等（1〜4人目・氏名／個人番号／区分）"),
+      ...famPersonRows(ex, "fuyouList", updPerson),
+      el("h4", {}, "16歳未満の扶養親族（1〜4人目・氏名／個人番号／区分）"),
+      ...famPersonRows(ex, "fuyou16List", updPerson),
+      el("div", { class: "field-row" }, [
+        field("死亡退職", checkboxField(ex.shibouTaishoku, v => upd("shibouTaishoku", v))),
+        field("災害者", checkboxField(ex.saigaisha, v => upd("saigaisha", v))),
+        field("本人が障害者", checkboxField(ex.honninShougai, v => upd("honninShougai", v))),
+        field("寡婦", checkboxField(ex.kafu, v => upd("kafu", v))),
+        field("ひとり親", checkboxField(ex.hitorioya, v => upd("hitorioya", v))),
+        field("勤労学生", checkboxField(ex.kinrouGakusei, v => upd("kinrouGakusei", v))),
+        field("未成年者", checkboxField(ex.miseinen, v => upd("miseinen", v))),
+        field("外国人", checkboxField(ex.gaikokujin, v => upd("gaikokujin", v))),
+      ]),
+      el("div", { class: "field-row" }, [
+        field("配偶者の合計所得（見積）", numInput(ex.haigushaShotoku, v => upd("haigushaShotoku", v))),
+        field("国民年金保険料等の金額", numInput(ex.kokuminNenkin, v => upd("kokuminNenkin", v))),
+        field("旧長期損害保険料の金額", numInput(ex.kyuuChoukiSongai, v => upd("kyuuChoukiSongai", v))),
+      ]),
+      el("div", { class: "field-row" }, [
+        field("新生命保険料", numInput(ex.seimeiShin, v => upd("seimeiShin", v))),
+        field("旧生命保険料", numInput(ex.seimeiKyu, v => upd("seimeiKyu", v))),
+        field("介護医療保険料", numInput(ex.kaigoIryo, v => upd("kaigoIryo", v))),
+        field("新個人年金保険料", numInput(ex.kojinShin, v => upd("kojinShin", v))),
+        field("旧個人年金保険料", numInput(ex.kojinKyu, v => upd("kojinKyu", v))),
+      ]),
+      el("div", { class: "field-row" }, [
+        field("住宅借入金等特別控除の内訳（自由記入：居住開始年月日・区分・年末残高・控除可能額など）", textInput(ex.jutakuMemo, v => upd("jutakuMemo", v)), true),
+      ]),
+      el("div", { class: "field-row" }, [
+        field("整理欄（社内・税理士管理用）", textInput(ex.seiriran, v => upd("seiriran", v))),
+        field("摘要（追加の備考）", textInput(ex.tekiyouExtra, v => upd("tekiyouExtra", v)), true),
+      ]),
+    ];
+    rows.forEach(r => extraCard.appendChild(r));
+  }
+
+  const toolbar = el("div", { class: "toolbar" });
+  toolbar.append(
+    field("従業員", selectField(empOptions, selEmp, v => { selEmp = Number(v); refreshExtraForm(); })),
+    yearDisplayField(),
+  );
+  selectCard.append(toolbar);
+  main.appendChild(selectCard);
+  main.appendChild(extraCard);
+
+  const pdfCard = el("div", { class: "card" });
+  const pdfFileInput = el("input", { type: "file", accept: "application/pdf" });
+  const pdfStatus = el("div", { class: "note" }, "");
+  const pdfFillBtn = el("button", {
+    class: "btn", onclick: async () => {
+      const emp = findEmployee(selEmp);
+      if (!emp) { flash("従業員が登録されていません。", true); return; }
+      if (!pdfFileInput.files[0]) { flash("先にPDFファイルを選択してください。", true); return; }
+      pdfFillBtn.disabled = true;
+      const origLabel = pdfFillBtn.textContent;
+      try {
+        await fillGensenPdfFile(pdfFileInput.files[0], emp, selYear, (msg) => {
+          pdfStatus.textContent = msg;
+        });
+        pdfStatus.textContent = "";
+      } catch (e) {
+        flash("PDFへの自動入力に失敗しました：" + e.message, true);
+        pdfStatus.textContent = "";
+      } finally {
+        pdfFillBtn.disabled = false;
+        pdfFillBtn.textContent = origLabel;
+      }
+    }
+  }, "📄 選択したPDFに自動入力してダウンロード");
+  pdfCard.append(
+    el("h3", {}, "国税庁PDF（入力用）に自動入力"),
+    el("div", { class: "note" },
+      "国税庁の「【入力用】給与所得の源泉徴収票（令和7年12月以後用）」PDFをあらかじめダウンロードし、下から選択してください。アプリで入力・計算済みの項目だけを自動入力したPDF（1枚目のみ）をダウンロードします（元のPDFは書き換えません）。※この機能はブラウザの中でPython（Pyodide）を動かして処理するため、利用時のみネット接続が必要で、初回は読み込みに数十秒かかります（2回目以降は速くなります）。※国税庁PDFにかかっている暗号化（コピー・編集制限）は自動的に解除して処理するので、ダウンロードしたそのままのPDFを選んでいただいて構いません。"),
+    el("div", { class: "field-row" }, [pdfFileInput]),
+    pdfFillBtn,
+    pdfStatus,
+    el("div", { class: "note" },
+      "自動入力されるのは、住所（従業員マスタの住所）・支払金額・各種控除額・社会保険料等・扶養親族の氏名/個人番号（1〜4人目）・生年月日（元号換算）・中途就職/退職日・乙欄や寡婦等のチェック欄・支払者（会社）の名称/住所/電話番号など、アプリが把握している項目です。住宅借入金等特別控除の1回目/2回目の内訳、扶養親族の区分コード（コード表と一致しない場合）、本人が障害者の「特別/その他」区分、支払者の個人番号又は法人番号などは、ダウンロード後にPDF上で直接ご入力ください。"),
+  );
+  main.appendChild(pdfCard);
+
+  refreshExtraForm();
+}
+
+// ============================================================================
+// 11. 税額表について
+// ============================================================================
+function renderTaxTablesPage(main) {
+  main.appendChild(pageHead("税額表について", "本アプリの計算根拠となっている国税庁公表資料です。"));
+  const card = el("div", { class: "card" });
+  card.innerHTML = `
+    <h3>出典・参考資料（${reiwaLabel(CALC_SUPPORTED_YEAR)}分）</h3>
+    <ul style="line-height:2; font-size:13px;">
+      <li>国税庁「令和8年分 源泉徴収税額表」</li>
+      <li>国税庁「月額表の甲欄を適用する給与等に対する税額の電算機計算の特例について（令和8年分以降）」</li>
+      <li>国税庁「月額表の乙欄を適用する給与等に対する税額の電算機計算について（令和8年分以降）」</li>
+      <li>国税庁「賞与に対する源泉徴収税額の算出率の表（令和8年分）」</li>
+      <li>国税庁「令和８年度税制改正による所得税の基礎控除の引上げ等について」</li>
+      <li>国税庁「年末調整のための算出所得税額の速算表」</li>
+    </ul>
+    <div class="note warn" style="margin-top:14px">
+      令和8年は、月々の源泉徴収（令和7年度改正ベース）と年末調整（令和8年度改正の確定値）で使う控除額が異なる
+      特殊な年です。月次で多めに源泉徴収された分は、年末調整で自動的に還付されます。これは制度上想定されたもの
+      で、計算誤りではありません。
+    </div>
+    <div class="note" style="margin-top:14px">
+      本アプリは一般的な情報提供を目的とした計算補助ツールです。実際の申告・納付にあたっては、必ず税理士等の
+      専門家又は所轄税務署・年金事務所・ハローワーク・協会けんぽ等にご確認ください。
+    </div>`;
+  main.appendChild(card);
+
+  if (currentYear !== CALC_SUPPORTED_YEAR) {
+    const card2 = el("div", { class: "card" });
+    card2.appendChild(el("h3", {}, "対象年度と計算根拠のずれについて"));
+    card2.appendChild(el("div", { class: "note warn" },
+      `現在サイドバーで選択されている対象年度は${reiwaLabel(currentYear)}（${currentYear}年）分ですが、`
+      + `上記の税額表・控除額はいずれも${reiwaLabel(CALC_SUPPORTED_YEAR)}分のものです。`
+      + `年度が変わっても給与額・控除額などの入力データ自体は年度ごとに正しく区別されて保存されますが、`
+      + `所得税額の計算式（税率・控除額）はこのアプリ内ではまだ${reiwaLabel(CALC_SUPPORTED_YEAR)}分のまま固定されています。`
+      + `${reiwaLabel(currentYear)}分の正式な税制改正内容（税額表・控除額等）が国税庁から公表されたら、`
+      + `このページの表とcalc.js内の計算式をあわせて更新してください。`));
+    main.appendChild(card2);
+  }
+}
+
+// ============================================================================
+// 12. データのバックアップ
+// ============================================================================
+function renderBackupPage(main) {
+  main.appendChild(pageHead("データのバックアップ",
+    "このアプリのデータはお使いのブラウザ内に保存されています。ブラウザのデータを消去すると失われるため、"
+    + "定期的にファイルへ書き出してバックアップすることをおすすめします。"));
+  const card = el("div", { class: "card" });
+  const toolbar = el("div", { class: "toolbar" });
+  toolbar.append(
+    el("button", { class: "btn", onclick: () => { Store.exportJson(); flash("バックアップファイルを書き出しました"); } }, "⬇ データを書き出す（JSON）"),
+    el("label", { class: "btn secondary" }, [
+      "⬆ バックアップから復元",
+      (() => {
+        const inp = el("input", { type: "file", accept: ".json", style: "display:none" });
+        inp.addEventListener("change", () => {
+          if (!inp.files[0]) return;
+          if (!confirm("現在のデータは上書きされます。復元しますか？")) return;
+          Store.importJson(inp.files[0], (ok) => {
+            if (ok) { flash("データを復元しました"); renderPage(); }
+            else flash("ファイルの読み込みに失敗しました", true);
+          });
+        });
+        return inp;
+      })(),
+    ]),
+    el("button", {
+      class: "btn danger", onclick: () => {
+        if (!confirm("すべてのデータを初期状態に戻します。よろしいですか？")) return;
+        Store.resetToDefault(); flash("初期状態に戻しました"); renderPage();
+      }
+    }, "初期状態にリセット"),
+  );
+  card.appendChild(toolbar);
+  main.appendChild(card);
+}
+
+// ---- register ----
+Object.assign(PAGE_RENDERERS, {
+  company: renderCompanyPage,
+  employees: renderEmployeesPage,
+  hyojun: renderHyojunPage,
+  monthly: renderMonthlyPage,
+  bonus: renderBonusPage,
+  payslip: renderPayslipPage,
+  bonusslip: renderBonusslipPage,
+  ledger: renderLedgerPage,
+  annualledger: renderAnnualLedgerPage,
+  nencho: renderNenchoPage,
+  gensen: renderGensenPage,
+  gensen2: renderGensen2Page,
+  taxtables: renderTaxTablesPage,
+  backup: renderBackupPage,
+});
+
+</script>
+<script>
+// ==== bootstrap ====
+Store.load();
+currentYear = pickDefaultYear();
+updatePageTitle();
+renderSidebar();
+renderPage();
+</script>
+<script>
+window.__PAGE_TITLE = "給与計算・年末調整システム（令和8年分）";
+</script>
+<script>
+// ==== PWA: サービスワーカー登録 ====
+// file://で直接開いた場合はService Workerが使えないため、http(s)経由（GitHub Pages等）で
+// 開いた時だけ登録する。登録に失敗してもアプリの他の機能には影響しない。
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch((e) => {
+      console.warn("Service Worker登録に失敗しました（オフライン対応が使えません）", e);
+    });
+  });
+}
+</script>
+</body>
+</html>
