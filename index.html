@@ -154,6 +154,36 @@
   .field{display:flex; flex-direction:column; gap:4px; min-width:170px;}
   .field.wide{min-width:320px; flex:1;}
   .field label{font-size:11.5px; color:var(--ink-soft); font-weight:600;}
+
+  /* ---------- 1件（従業員1名分）を2行に区切って表示するレコードカード ----------
+     横スクロールが必要な幅広テーブルの代わりに、従業員マスタ・月次給与の入力画面で使う。
+     賃金台帳・印刷（buildLedgerHtml等）は従来どおり1行のテーブル表示のまま変更していない。 */
+  .reclist{display:flex; flex-direction:column; gap:10px; margin-bottom:16px;}
+  .recblock{
+    background:#fff; border:1px solid var(--line); border-radius:var(--radius);
+    padding:10px 14px 12px 14px;
+  }
+  .recblock.retired{background:#fdf6f5; border-color:#f0c7b5;}
+  .recline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 14px;}
+  .recline + .recline{margin-top:8px; padding-top:8px; border-top:1px dashed var(--line);}
+  .recfield{display:flex; flex-direction:column; gap:3px;}
+  .recfield label{font-size:10.5px; color:var(--ink-soft); font-weight:600; white-space:nowrap;}
+  .recfield input[type=text],.recfield input[type=number]{padding:5px 7px; font-size:13px;}
+  .recfield .calcval{
+    padding:5px 7px; font-size:13px; font-weight:700; color:#2a3b4d;
+    background:#f0f2f5; border:1px solid var(--line); border-radius:4px; min-height:15px;
+    text-align:right; white-space:nowrap;
+  }
+  .recfield .calcval.net{background:var(--navy); color:#fff; border-color:var(--navy);}
+  .recfield.ckbox{flex-direction:row; align-items:center; gap:6px; padding-bottom:4px;}
+  .recfield.ckbox label{white-space:normal; max-width:78px; line-height:1.25;}
+  .recheadrow{display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;}
+  .recname{font-weight:700; font-size:13.5px; color:var(--navy);}
+  .rectotal{background:#173a5e; border-color:#173a5e;}
+  .rectotal .recname{color:#fff;}
+  .rectotal .recfield label{color:#bcd0e6;}
+  .rectotal .calcval{background:rgba(255,255,255,.14); color:#fff; border-color:rgba(255,255,255,.3);}
+  .rectotal .calcval.net{background:#fff; color:var(--navy); border-color:#fff;}
   input[type=text],input[type=number],input[type=date],select,textarea{
     font-family:inherit;
     font-size:13.5px;
@@ -1464,7 +1494,20 @@ function field(label, inputEl, wide = false) {
     inputEl,
   ]);
 }
-// 対象年を表示するだけの読み取り専用フィールド。年末調整・個人別賃金台帳・源泉徴収票の各ページは、
+// 「1件を2行に区切って表示するカード」用の、ラベル付きフィールド。
+// checkbox=trueの場合はチェックボックスとラベルを横並びにするコンパクト表示にする。
+function recField(label, inputEl, opts = {}) {
+  const cls = "recfield" + (opts.checkbox ? " ckbox" : "");
+  const style = opts.minWidth ? `min-width:${opts.minWidth};` : "";
+  if (opts.checkbox) {
+    return el("div", { class: cls, style }, [inputEl, el("label", {}, label)]);
+  }
+  return el("div", { class: cls, style }, [el("label", {}, label), inputEl]);
+}
+// 計算結果（読み取り専用）を表示するための小さな値表示欄
+function calcVal(text, opts = {}) {
+  return el("div", { class: "calcval" + (opts.net ? " net" : "") }, text);
+}
 // サイドバーの「対象年度」切り替えに連動して年を決めるため、ページ側では変更させず表示のみ行う。
 function yearDisplayField() {
   return field("対象年（サイドバーの「対象年度」で切替）",
@@ -1565,35 +1608,28 @@ function renderEmployeesPage(main) {
   toolbar.appendChild(addBtn);
   main.appendChild(toolbar);
 
-  const wrap = el("div", { class: "tablewrap" });
-  const table = el("table", { class: "datatable" });
-  const thead = el("thead", {}, el("tr", {}, [
-    "ID", "氏名", "生年月日", "入社日", "住所", "扶養控除等\n申告書提出", "配偶者\n(源泉控除対象)",
-    "介護保険\n該当", "雇用保険\n個人適用", "扶養\n(一般)", "扶養\n(特定)", "扶養\n(老人別居)",
-    "同居老親等", "障害者等\n加算", "年末調整\n対象", "住民税\n(6月)", "住民税\n(6月以外)", "備考", "退職処理",
-  ].map(h => el("th", {}, h))));
-  table.appendChild(thead);
-  const tbody = el("tbody");
+  const list = el("div", { class: "reclist" });
 
   data.employees.forEach(emp => {
-    const tr = el("tr");
     const upd = (k, v) => { emp[k] = v; Store.save(); };
-    const nameCell = el("td", { class: "tleft" });
-    nameCell.appendChild(textInput(emp.name, v => upd("name", v), { minWidth: "160px" }));
+    const block = el("div", { class: "recblock" + (emp.retired ? " retired" : "") });
+
+    // ---- 1行目：氏名・基本情報・備考・退職処理 ----
+    const nameField = recField("氏名", textInput(emp.name, v => upd("name", v), { minWidth: "140px" }), { minWidth: "150px" });
     if (emp.retired) {
-      nameCell.appendChild(el("div", { style: "color:#a33; font-size:11.5px; font-weight:700; margin-top:2px;" }, retireLabelText(emp)));
+      nameField.appendChild(el("div", { style: "color:#a33; font-size:11px; font-weight:700;" }, retireLabelText(emp)));
     }
-    const retireCell = el("td");
+    let retireBtn;
     if (emp.retired) {
-      retireCell.appendChild(el("button", {
+      retireBtn = el("button", {
         class: "btn secondary small", onclick: () => {
           if (!confirm(`${emp.name} の退職設定を取り消しますか？（通常の在職者に戻します）`)) return;
           emp.retired = false; emp.retireLastYm = null;
           Store.save(); renderPage();
         }
-      }, "退職取消"));
+      }, "退職取消");
     } else {
-      retireCell.appendChild(el("button", {
+      retireBtn = el("button", {
         class: "btn danger small", onclick: () => {
           const input = prompt(`${emp.name} を退職処理します。\n最後の給与となる「対象年月」をYYYY-MM形式で入力してください（例：${currentYear}-08）`, "");
           if (input === null) return;
@@ -1605,34 +1641,38 @@ function renderEmployeesPage(main) {
           Store.save(); renderPage();
           flash("退職処理を反映しました");
         }
-      }, "退職"));
+      }, "退職");
     }
-    tr.append(
-      el("td", {}, String(emp.id)),
-      nameCell,
-      el("td", {}, dateInput(emp.birth, v => upd("birth", v))),
-      el("td", {}, dateInput(emp.hire, v => upd("hire", v))),
-      el("td", { class: "tleft" }, textInput(emp.addr || "", v => upd("addr", v), { minWidth: "160px" })),
-      el("td", {}, checkboxField(emp.fuyoShinkoku, v => upd("fuyoShinkoku", v))),
-      el("td", {}, checkboxField(emp.haigusha, v => upd("haigusha", v))),
-      el("td", {}, checkboxField(emp.kaigo, v => upd("kaigo", v))),
-      el("td", {}, checkboxField(emp.koyouKobetsu, v => upd("koyouKobetsu", v))),
-      el("td", {}, numInput(emp.ippan, v => upd("ippan", v))),
-      el("td", {}, numInput(emp.tokutei, v => upd("tokutei", v))),
-      el("td", {}, numInput(emp.roujin, v => upd("roujin", v))),
-      el("td", {}, numInput(emp.doukyo, v => upd("doukyo", v))),
-      el("td", {}, numInput(emp.shougai, v => upd("shougai", v))),
-      el("td", {}, checkboxField(emp.nenchoTaisho, v => upd("nenchoTaisho", v))),
-      el("td", {}, moneyInput(emp.juminzeiJune, v => upd("juminzeiJune", v))),
-      el("td", {}, moneyInput(emp.juminzeiOther, v => upd("juminzeiOther", v))),
-      el("td", { class: "tleft" }, textInput(emp.memo, v => upd("memo", v))),
-      retireCell,
-    );
-    tbody.appendChild(tr);
+    const line1 = el("div", { class: "recline" }, [
+      recField("ID", el("div", { class: "calcval", style: "background:#fff;border:none;padding:5px 2px;" }, String(emp.id)), { minWidth: "34px" }),
+      nameField,
+      recField("生年月日", dateInput(emp.birth, v => upd("birth", v)), { minWidth: "140px" }),
+      recField("入社日", dateInput(emp.hire, v => upd("hire", v)), { minWidth: "140px" }),
+      recField("住所", textInput(emp.addr || "", v => upd("addr", v), { minWidth: "180px" }), { minWidth: "190px" }),
+      recField("備考", textInput(emp.memo, v => upd("memo", v), { minWidth: "160px" }), { minWidth: "170px" }),
+      recField("退職処理", retireBtn, { minWidth: "78px" }),
+    ]);
+
+    // ---- 2行目：税務・保険まわりの設定 ----
+    const line2 = el("div", { class: "recline" }, [
+      recField("扶養控除等申告書提出", checkboxField(emp.fuyoShinkoku, v => upd("fuyoShinkoku", v)), { checkbox: true }),
+      recField("配偶者(源泉控除対象)", checkboxField(emp.haigusha, v => upd("haigusha", v)), { checkbox: true }),
+      recField("介護保険該当", checkboxField(emp.kaigo, v => upd("kaigo", v)), { checkbox: true }),
+      recField("雇用保険個人適用", checkboxField(emp.koyouKobetsu, v => upd("koyouKobetsu", v)), { checkbox: true }),
+      recField("扶養(一般)", numInput(emp.ippan, v => upd("ippan", v)), { minWidth: "56px" }),
+      recField("扶養(特定)", numInput(emp.tokutei, v => upd("tokutei", v)), { minWidth: "56px" }),
+      recField("扶養(老人別居)", numInput(emp.roujin, v => upd("roujin", v)), { minWidth: "56px" }),
+      recField("同居老親等", numInput(emp.doukyo, v => upd("doukyo", v)), { minWidth: "56px" }),
+      recField("障害者等加算", numInput(emp.shougai, v => upd("shougai", v)), { minWidth: "56px" }),
+      recField("年末調整対象", checkboxField(emp.nenchoTaisho, v => upd("nenchoTaisho", v)), { checkbox: true }),
+      recField("住民税(6月)", moneyInput(emp.juminzeiJune, v => upd("juminzeiJune", v)), { minWidth: "90px" }),
+      recField("住民税(6月以外)", moneyInput(emp.juminzeiOther, v => upd("juminzeiOther", v)), { minWidth: "90px" }),
+    ]);
+
+    block.append(line1, line2);
+    list.appendChild(block);
   });
-  table.appendChild(tbody);
-  wrap.appendChild(table);
-  main.appendChild(wrap);
+  main.appendChild(list);
   main.appendChild(el("div", { class: "note" },
     "扶養親族等の人数は「源泉控除対象」（年間所得の要件を満たす人）の人数を区分ごとに入力します。「扶養控除等申告書提出」のチェックを外すと（乙欄該当者）、月次給与の所得税が乙欄で自動計算されます。「雇用保険 個人適用」のチェックを外すと、役員など雇用保険の被保険者とならない人を個別に除外できます。"));
   main.appendChild(el("div", { class: "note" },
@@ -1745,18 +1785,10 @@ function renderMonthlyPage(main) {
   toolbar.appendChild(spacer);
   main.appendChild(toolbar);
 
-  const wrap = el("div", { class: "tablewrap" });
-  const table = el("table", { class: "datatable" });
-  table.appendChild(el("thead", {}, el("tr", {}, [
-    "氏名", "区分", "基本給", "諸手当", "残業手当", "通勤手当\n(非課税)", "通勤手当\n(課税)",
-    "課税総支給額", "総支給額",
-    "健保", "支援金", "介護", "厚生年金", "雇用保険", "社会保険料等\n控除合計", "社保控除後(A)",
-    "所得税", "住民税", "その他控除", "控除合計", "差引支給額",
-  ].map(h => el("th", {}, h)))));
-  const tbody = el("tbody");
+  const list = el("div", { class: "reclist" });
 
-  // 各行・合計行の「計算結果」セルへの参照を保持しておき、入力が変わった時は
-  // このセルの表示だけを直接書き換える（ページ全体を再描画しない）。
+  // 各行・合計行の「計算結果」表示要素への参照を保持しておき、入力が変わった時は
+  // この要素の表示だけを直接書き換える（ページ全体を再描画しない）。
   // ページ全体を再描画すると、入力欄からフォーカスが外れた瞬間にDOMごと作り直されるため、
   // 「次の人をクリック」しても、そのクリックの相手先がもう無くなっていて反応しない
   // （もう一度クリックし直す必要がある）という不具合が起きていた。またスクロール位置も崩れていた。
@@ -1809,7 +1841,6 @@ function renderMonthlyPage(main) {
   data.employees.forEach(emp => {
     if (!isEmployeeActiveForYm(emp, monthlySelectedYm)) return;
     const row = computeMonthlyRow(emp.id, monthlySelectedYm);
-    const tr = el("tr");
     const input = row.input;
     const ref = { emp, td: {} };
     const saveField = (k, v) => {
@@ -1817,57 +1848,92 @@ function renderMonthlyPage(main) {
       updateRowCells(ref);
       updateTotalsRow();
     };
-    ref.td.kazeiSoshikyu = el("td", {}, yen(row.kazeiSoshikyu));
-    ref.td.souShikyu = el("td", {}, yen(row.souShikyu));
-    ref.td.kenpo = el("td", {}, yen(row.kenpo));
-    ref.td.shien = el("td", {}, yen(row.shien));
-    ref.td.kaigo = el("td", {}, yen(row.kaigo));
-    ref.td.kousei = el("td", {}, yen(row.kousei));
-    ref.td.koyou = el("td", {}, yen(row.koyou));
-    ref.td.shahoKei = el("td", {}, yen(row.shahoKei));
-    ref.td.A = el("td", {}, yen(row.A));
-    ref.td.tax = el("td", {}, yen(row.tax));
-    ref.td.juminzei = el("td", {}, yen(row.juminzei));
-    ref.td.koujoKei = el("td", {}, yen(row.koujoKei));
-    ref.td.sashihiki = el("td", {}, yen(row.sashihiki));
-    tr.append(
-      el("td", { class: "tleft" }, emp.name),
-      el("td", {}, el("span", { class: "pill " + (row.isOtsu ? "otsu" : "kou") }, row.isOtsu ? "乙欄" : "甲欄")),
-      el("td", {}, moneyInput(input.kihonkyu, v => saveField("kihonkyu", v))),
-      el("td", {}, moneyInput(input.shokate, v => saveField("shokate", v))),
-      el("td", {}, moneyInput(input.zangyo, v => saveField("zangyo", v))),
-      el("td", {}, moneyInput(input.tsukin, v => saveField("tsukin", v))),
-      el("td", {}, moneyInput(input.tsukinKazei, v => saveField("tsukinKazei", v))),
-      ref.td.kazeiSoshikyu, ref.td.souShikyu, ref.td.kenpo, ref.td.shien, ref.td.kaigo, ref.td.kousei, ref.td.koyou,
-      ref.td.shahoKei, ref.td.A, ref.td.tax, ref.td.juminzei,
-      el("td", {}, moneyInput(input.sonota, v => saveField("sonota", v))),
-      ref.td.koujoKei, ref.td.sashihiki,
-    );
-    tbody.appendChild(tr);
+    ref.td.kazeiSoshikyu = calcVal(yen(row.kazeiSoshikyu));
+    ref.td.souShikyu = calcVal(yen(row.souShikyu));
+    ref.td.kenpo = calcVal(yen(row.kenpo));
+    ref.td.shien = calcVal(yen(row.shien));
+    ref.td.kaigo = calcVal(yen(row.kaigo));
+    ref.td.kousei = calcVal(yen(row.kousei));
+    ref.td.koyou = calcVal(yen(row.koyou));
+    ref.td.shahoKei = calcVal(yen(row.shahoKei));
+    ref.td.A = calcVal(yen(row.A));
+    ref.td.tax = calcVal(yen(row.tax));
+    ref.td.juminzei = calcVal(yen(row.juminzei));
+    ref.td.koujoKei = calcVal(yen(row.koujoKei));
+    ref.td.sashihiki = calcVal(yen(row.sashihiki), { net: true });
+
+    const block = el("div", { class: "recblock" + (row.isOtsu ? "" : "") });
+    // ---- 1行目：支給項目 ----
+    const line1 = el("div", { class: "recline" }, [
+      el("div", { class: "recfield", style: "min-width:130px;" }, [
+        el("label", {}, "氏名／区分"),
+        el("div", { style: "display:flex; align-items:center; gap:6px;" }, [
+          el("span", { class: "recname" }, emp.name),
+          el("span", { class: "pill " + (row.isOtsu ? "otsu" : "kou") }, row.isOtsu ? "乙欄" : "甲欄"),
+        ]),
+      ]),
+      recField("基本給", moneyInput(input.kihonkyu, v => saveField("kihonkyu", v)), { minWidth: "100px" }),
+      recField("諸手当", moneyInput(input.shokate, v => saveField("shokate", v)), { minWidth: "100px" }),
+      recField("残業手当", moneyInput(input.zangyo, v => saveField("zangyo", v)), { minWidth: "100px" }),
+      recField("通勤手当(非課税)", moneyInput(input.tsukin, v => saveField("tsukin", v)), { minWidth: "110px" }),
+      recField("通勤手当(課税)", moneyInput(input.tsukinKazei, v => saveField("tsukinKazei", v)), { minWidth: "100px" }),
+      recField("課税総支給額", ref.td.kazeiSoshikyu, { minWidth: "100px" }),
+      recField("総支給額", ref.td.souShikyu, { minWidth: "100px" }),
+    ]);
+    // ---- 2行目：控除項目 ----
+    const line2 = el("div", { class: "recline" }, [
+      recField("健保", ref.td.kenpo, { minWidth: "76px" }),
+      recField("支援金", ref.td.shien, { minWidth: "76px" }),
+      recField("介護", ref.td.kaigo, { minWidth: "76px" }),
+      recField("厚生年金", ref.td.kousei, { minWidth: "82px" }),
+      recField("雇用保険", ref.td.koyou, { minWidth: "76px" }),
+      recField("社保等控除合計", ref.td.shahoKei, { minWidth: "100px" }),
+      recField("社保控除後(A)", ref.td.A, { minWidth: "92px" }),
+      recField("所得税", ref.td.tax, { minWidth: "82px" }),
+      recField("住民税", ref.td.juminzei, { minWidth: "82px" }),
+      recField("その他控除", moneyInput(input.sonota, v => saveField("sonota", v)), { minWidth: "90px" }),
+      recField("控除合計", ref.td.koujoKei, { minWidth: "92px" }),
+      recField("差引支給額", ref.td.sashihiki, { minWidth: "100px" }),
+    ]);
+    block.append(line1, line2);
+    list.appendChild(block);
     rowRefs.push(ref);
   });
 
   let totalsTd = null;
   if (rowRefs.length > 0) {
-    const tr = el("tr", { class: "row-total" });
     totalsTd = {
-      kazeiSoshikyu: el("td", {}, ""), souShikyu: el("td", {}, ""), kenpo: el("td", {}, ""), shien: el("td", {}, ""),
-      kaigo: el("td", {}, ""), kousei: el("td", {}, ""), koyou: el("td", {}, ""), shahoKei: el("td", {}, ""),
-      tax: el("td", {}, ""), juminzei: el("td", {}, ""), sonota: el("td", {}, ""), koujoKei: el("td", {}, ""), sashihiki: el("td", {}, ""),
+      kazeiSoshikyu: calcVal(""), souShikyu: calcVal(""), kenpo: calcVal(""), shien: calcVal(""),
+      kaigo: calcVal(""), kousei: calcVal(""), koyou: calcVal(""), shahoKei: calcVal(""),
+      tax: calcVal(""), juminzei: calcVal(""), sonota: calcVal(""), koujoKei: calcVal(""), sashihiki: calcVal("", { net: true }),
     };
-    tr.append(
-      el("td", { class: "tleft" }, "合計"), el("td", {}, ""),
-      el("td", {}, ""), el("td", {}, ""), el("td", {}, ""), el("td", {}, ""), el("td", {}, ""),
-      totalsTd.kazeiSoshikyu, totalsTd.souShikyu, totalsTd.kenpo, totalsTd.shien, totalsTd.kaigo, totalsTd.kousei, totalsTd.koyou,
-      totalsTd.shahoKei, el("td", {}, ""), totalsTd.tax, totalsTd.juminzei,
-      totalsTd.sonota, totalsTd.koujoKei, totalsTd.sashihiki,
-    );
-    tbody.appendChild(tr);
+    const totalBlock = el("div", { class: "recblock rectotal" });
+    const tline1 = el("div", { class: "recline" }, [
+      el("div", { class: "recfield", style: "min-width:130px;" }, [
+        el("label", {}, "　"),
+        el("span", { class: "recname" }, "合計"),
+      ]),
+      recField("課税総支給額", totalsTd.kazeiSoshikyu, { minWidth: "100px" }),
+      recField("総支給額", totalsTd.souShikyu, { minWidth: "100px" }),
+    ]);
+    const tline2 = el("div", { class: "recline" }, [
+      recField("健保", totalsTd.kenpo, { minWidth: "76px" }),
+      recField("支援金", totalsTd.shien, { minWidth: "76px" }),
+      recField("介護", totalsTd.kaigo, { minWidth: "76px" }),
+      recField("厚生年金", totalsTd.kousei, { minWidth: "82px" }),
+      recField("雇用保険", totalsTd.koyou, { minWidth: "76px" }),
+      recField("社保等控除合計", totalsTd.shahoKei, { minWidth: "100px" }),
+      recField("所得税", totalsTd.tax, { minWidth: "82px" }),
+      recField("住民税", totalsTd.juminzei, { minWidth: "82px" }),
+      recField("その他控除", totalsTd.sonota, { minWidth: "90px" }),
+      recField("控除合計", totalsTd.koujoKei, { minWidth: "92px" }),
+      recField("差引支給額", totalsTd.sashihiki, { minWidth: "100px" }),
+    ]);
+    totalBlock.append(tline1, tline2);
+    list.appendChild(totalBlock);
     updateTotalsRow();
   }
-  table.appendChild(tbody);
-  wrap.appendChild(table);
-  main.appendChild(wrap);
+  main.appendChild(list);
 }
 
 // ============================================================================
