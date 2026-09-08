@@ -1,13 +1,13 @@
 {
-  "name": "給与計算・年末調整システム",
-  "short_name": "給与計算",
-  "description": "給与計算・年末調整・源泉徴収票作成アプリ（単体HTML・ブラウザ完結型）",
+  "name": "収支計算アプリ",
+  "short_name": "収支計算アプリ",
+  "description": "レシートの記帳・仕訳帳・消費税集計・確定申告用の収支内訳書出力ができる記帳代行用アプリ",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "any",
-  "background_color": "#fafbfc",
-  "theme_color": "#173a5e",
+  "orientation": "portrait",
+  "background_color": "#EDEBE4",
+  "theme_color": "#1E5A48",
   "lang": "ja",
   "icons": [
     {
