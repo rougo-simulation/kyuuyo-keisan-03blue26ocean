@@ -1,7 +1,7 @@
 // 記帳アプリ サービスワーカー
 // キャッシュ名はファイルを更新するたびに数字を上げてください（例: v1 -> v2）。
 // 上げないと、公開後にファイルを更新してもユーザーの端末には古いキャッシュが残り続けます。
-const CACHE_NAME = 'kicho-app-cache-v3';
+const CACHE_NAME = 'kicho-app-cache-v6';
 
 const APP_SHELL = [
   './',
@@ -14,11 +14,11 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', function(event) {
+  // ここでは skipWaiting しない。新しいバージョンは一旦 "待機中" のままにし、
+  // アプリ側の「アップデートを確認」→「今すぐ更新する」操作で有効化する。
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
       return cache.addAll(APP_SHELL);
-    }).then(function(){
-      return self.skipWaiting();
     })
   );
 });
@@ -34,6 +34,14 @@ self.addEventListener('activate', function(event) {
       return self.clients.claim();
     })
   );
+});
+
+// アプリ画面からの「今すぐ更新する」操作で送られてくるメッセージ。
+// これを受け取った時だけ、待機中の新バージョンを有効化する。
+self.addEventListener('message', function(event) {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // 同一オリジンのファイルはキャッシュ優先（オフライン対応）。
