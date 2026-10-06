@@ -1146,8 +1146,19 @@ const NAV = [
   { group: "参考・管理", items: [
     { id: "taxtables", label: "税額表について" },
     { id: "backup", label: "データのバックアップ" },
+    { id: "update", label: "アップデートを確認" },
   ]},
 ];
+
+// ============================================================================
+// アプリのバージョン情報
+// 【重要】新しいindex.htmlをGitHubにアップロードするたびに、下の日付時刻を手動で
+// 書き換えてください（YYYY-MM-DD HH:MM、JST＝日本標準時）。あわせて、リポジトリ直下の
+// version.json の versionDate も必ず同じ値に更新してアップロードしてください。
+// 「アップデートを確認」ページは、この定数（＝今起動しているアプリ自身のバージョン）と
+// version.json（＝サーバー上の最新バージョン）を比較して新着を判定します。
+// ============================================================================
+const APP_VERSION_DATE = "2026-10-06 19:26";
 
 let currentPage = "company";
 // 現在選択中の年度（西暦）。ブートストラップ時にpickDefaultYear()で初期化される。
@@ -3044,6 +3055,109 @@ function renderBackupPage(main) {
   main.appendChild(card);
 }
 
+// ============================================================================
+// 13. アップデートを確認
+// ============================================================================
+// このアプリ自身のバージョン（APP_VERSION_DATE）と、サーバー（GitHub Pages）上の
+// version.json に書かれた最新バージョンを比較し、新しいものがあれば
+// その場でService Workerを更新してページを再読み込みする。
+// どちらの値も「YYYY-MM-DD HH:MM」形式（JST・ゼロ埋め）で記録しており、
+// この形式は文字列のまま大小比較しても日時の前後関係と一致するため、
+// 単純な文字列比較で新旧判定ができる。
+function renderUpdatePage(main) {
+  main.appendChild(pageHead("アップデートを確認",
+    "このアプリ（GitHub Pages版）に、今お使いのバージョンより新しいものが公開されていないか確認し、その場で更新できます。"));
+
+  const card = el("div", { class: "card" });
+  card.appendChild(el("h3", {}, "現在のバージョン"));
+  const kv = el("div", { class: "kv" });
+  kv.append(
+    el("div", { class: "k" }, "バージョン日時"),
+    el("div", { style: "font-weight:700;" }, `${APP_VERSION_DATE}（JST）`),
+  );
+  card.appendChild(kv);
+
+  const statusBox = el("div", { class: "note", style: "margin-top:14px;" },
+    "「最新バージョンを確認」ボタンを押してください。");
+  const checkBtn = el("button", { class: "btn" }, "🔄 最新バージョンを確認");
+  const updateBtn = el("button", { class: "btn secondary", style: "display:none; margin-left:8px;" }, "⬇ 今すぐアップデートを適用する");
+
+  checkBtn.addEventListener("click", async () => {
+    checkBtn.disabled = true;
+    statusBox.className = "note";
+    statusBox.textContent = "確認しています…";
+    updateBtn.style.display = "none";
+    try {
+      // キャッシュを一切使わず、必ずサーバーへ取りに行く
+      const res = await fetch("./version.json", { cache: "no-store" });
+      if (!res.ok) throw new Error("version.json HTTP " + res.status);
+      const info = await res.json();
+      const latest = info.versionDate || "";
+      if (!latest) throw new Error("versionDateが空です");
+      if (latest > APP_VERSION_DATE) {
+        statusBox.className = "note warn";
+        statusBox.innerHTML = `🆕 新しいバージョンがあります。<br>現在：${APP_VERSION_DATE}　→　最新：${latest}`;
+        updateBtn.style.display = "inline-flex";
+      } else {
+        statusBox.className = "note";
+        statusBox.innerHTML = `✅ 最新版です（${APP_VERSION_DATE}）。`;
+      }
+    } catch (e) {
+      statusBox.className = "note warn";
+      statusBox.innerHTML = "確認できませんでした。インターネットに接続されているかご確認ください。"
+        + "また、この機能はGitHub Pagesで公開されたURL（httpsで始まるアドレス）でアプリを開いている場合のみ利用できます。"
+        + "ファイルを直接開いている（file://）場合はこの機能は使えないため、GitHubリポジトリの内容を確認し、"
+        + "新しいファイルを手動でダウンロード・上書きしてください。";
+      console.warn("update check failed", e);
+    } finally {
+      checkBtn.disabled = false;
+    }
+  });
+
+  updateBtn.addEventListener("click", async () => {
+    updateBtn.disabled = true;
+    checkBtn.disabled = true;
+    statusBox.className = "note";
+    statusBox.textContent = "更新を適用しています…このままお待ちください（画面が自動的に再読み込みされます）。";
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          await reg.update(); // 新しいservice-worker.jsがあれば取得・インストールを開始させる
+          if (reg.installing) {
+            await new Promise((resolve) => {
+              const w = reg.installing;
+              const onChange = () => {
+                if (w.state === "activated" || w.state === "redundant") {
+                  w.removeEventListener("statechange", onChange);
+                  resolve();
+                }
+              };
+              w.addEventListener("statechange", onChange);
+              setTimeout(resolve, 8000); // 念のためのタイムアウト（固まらないように）
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("update apply failed", e);
+    }
+    // キャッシュに関わらず必ず最新のHTMLを取得させるため、クエリ付きで再読み込みする
+    location.href = location.pathname + "?updated=" + Date.now();
+  });
+
+  const toolbar = el("div", { class: "toolbar", style: "margin-top:12px;" });
+  toolbar.append(checkBtn, updateBtn);
+  card.append(statusBox, toolbar);
+  main.appendChild(card);
+
+  main.appendChild(el("div", { class: "note" },
+    "この機能は、GitHub PagesのURL（httpsで始まるアドレス）でアプリを開いている場合にだけ動作します。"
+    + "file://で直接開いているローカル版では「確認できませんでした」と表示されます（正常な動作です）。"
+    + "「今すぐアップデートを適用する」を押すとページが再読み込みされますが、入力中のデータはブラウザの"
+    + "localStorageに保存済みなので失われません（心配な場合は先に「データのバックアップ」でJSONを書き出してください）。"));
+}
+
 // ---- register ----
 Object.assign(PAGE_RENDERERS, {
   company: renderCompanyPage,
@@ -3060,6 +3174,7 @@ Object.assign(PAGE_RENDERERS, {
   gensen2: renderGensen2Page,
   taxtables: renderTaxTablesPage,
   backup: renderBackupPage,
+  update: renderUpdatePage,
 });
 
 </script>

@@ -4,7 +4,7 @@
 // 【重要】アプリを更新してGitHubに再アップロードするたびに、下の CACHE_VERSION の
 // 数字を1つ増やしてください（例："v1" → "v2"）。増やさないと、スマホ/PCにインストール
 // 済みの人には古いキャッシュのままのアプリが表示され続けてしまいます。
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const CACHE_NAME = `payroll-app-${CACHE_VERSION}`;
 
 // オフラインでも最低限アプリが起動できるよう、事前にキャッシュしておくファイル。
@@ -46,6 +46,14 @@ self.addEventListener("fetch", (event) => {
   // 同一オリジン（このアプリ自身のファイル）以外（Pyodide CDN等）はサービスワーカーで
   // 制御せず、通常のブラウザ処理に任せる（PDF自動入力機能に必要なため）。
   if (new URL(req.url).origin !== self.location.origin) {
+    return;
+  }
+
+  // version.json（「アップデートを確認」ページが参照する最新バージョン情報）は、
+  // 常にキャッシュを一切使わずネットワークへ取りに行く。ここをキャッシュしてしまうと、
+  // 更新確認そのものが常に「最新版です」と誤判定されてしまうため。
+  if (new URL(req.url).pathname.endsWith("/version.json")) {
+    event.respondWith(fetch(req, { cache: "no-store" }));
     return;
   }
 
