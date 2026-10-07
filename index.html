@@ -792,23 +792,69 @@ const Store = (function () {
     return true;
   }
 
-  function exportJson() {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  // ファイル名に使えない文字（/ \ : * ? " < > |）を置き換える
+  function sanitizeFilenamePart(s) {
+    const cleaned = String(s || "").replace(/[\\/:*?"<>|]/g, "_").trim();
+    return cleaned || "名称未設定";
+  }
+  // バックアップファイル名用のタイムスタンプ（日付＋時刻、ローカル時刻基準）
+  function backupTimestamp() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+  }
+  function downloadJsonBlob(obj, filename) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const ts = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     a.href = url;
-    a.download = `給与データバックアップ_${ts}.json`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
   }
-  function importJson(file, cb) {
+  const ALL_PROFILES_BACKUP_TYPE = "payroll-app-all-profiles-backup";
+
+  // ---- バックアップ（書き出し） ----
+  // 現在アクティブな会社プロファイルのみを書き出す
+  function exportCurrentProfileJson() {
+    const companyName = (data.company && data.company.name) || "会社";
+    const filename = `給与データバックアップ_${sanitizeFilenamePart(companyName)}_${backupTimestamp()}.json`;
+    downloadJsonBlob(data, filename);
+  }
+  // 登録中の全会社プロファイルを1ファイルにまとめて書き出す
+  function exportAllProfilesJson() {
+    save(); // 現在編集中のプロファイルを確実にlocalStorageへ反映してから集める
+    const meta = ensureProfilesMeta();
+    const profilesData = {};
+    meta.profiles.forEach((p) => {
+      try {
+        const raw = localStorage.getItem(profileDataKey(p.id));
+        if (raw) profilesData[p.id] = JSON.parse(raw);
+      } catch (e) { /* ignore */ }
+    });
+    const payload = {
+      type: ALL_PROFILES_BACKUP_TYPE,
+      exportedAt: new Date().toISOString(),
+      profilesMeta: meta,
+      profiles: profilesData,
+    };
+    const filename = `給与データバックアップ_全社バックアップ_${backupTimestamp()}.json`;
+    downloadJsonBlob(payload, filename);
+  }
+
+  // ---- 復元（読み込み） ----
+  // 現在アクティブな会社プロファイルにのみ復元する（個別バックアップファイル用）
+  function importCurrentProfileJson(file, cb) {
     const reader = new FileReader();
     reader.onload = function (e) {
       try {
         const parsed = JSON.parse(e.target.result);
+        if (parsed && parsed.type === ALL_PROFILES_BACKUP_TYPE) {
+          cb(false, new Error("このファイルは「全社バックアップ」のデータです。「全社を一括復元」から読み込んでください。"));
+          return;
+        }
         data = parsed;
         save();
         cb(true);
@@ -818,9 +864,40 @@ const Store = (function () {
     };
     reader.readAsText(file, "utf-8");
   }
+  // 登録中の全会社プロファイルを一括で復元する（全社バックアップファイル用）
+  function importAllProfilesJson(file, cb) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        if (!parsed || parsed.type !== ALL_PROFILES_BACKUP_TYPE || !parsed.profilesMeta || !parsed.profiles) {
+          cb(false, new Error("このファイルは「全社バックアップ」の形式ではありません。個別のバックアップファイルは「現在の会社に復元」から読み込んでください。"));
+          return;
+        }
+        // 既存の全プロファイルのデータを一旦削除してから、バックアップの内容で書き直す
+        const oldMeta = loadProfilesMeta();
+        if (oldMeta && Array.isArray(oldMeta.profiles)) {
+          oldMeta.profiles.forEach((p) => {
+            try { localStorage.removeItem(profileDataKey(p.id)); } catch (e2) { /* ignore */ }
+          });
+        }
+        Object.keys(parsed.profiles).forEach((pid) => {
+          try { localStorage.setItem(profileDataKey(pid), JSON.stringify(parsed.profiles[pid])); } catch (e2) { /* ignore */ }
+        });
+        saveProfilesMeta(parsed.profilesMeta);
+        load();
+        cb(true);
+      } catch (err) {
+        cb(false, err);
+      }
+    };
+    reader.readAsText(file, "utf-8");
+  }
 
   return {
-    load, save, get, resetToDefault, exportJson, importJson,
+    load, save, get, resetToDefault,
+    exportCurrentProfileJson, exportAllProfilesJson,
+    importCurrentProfileJson, importAllProfilesJson,
     listProfiles, activeProfileId, switchProfile, addProfile, renameProfile, deleteProfile,
   };
 })();
@@ -924,6 +1001,26 @@ function pickDefaultYear() {
   const real = new Date().getFullYear();
   if (avail.includes(real)) return real;
   return avail[avail.length - 1];
+}
+// 月次給与・給与明細・賃金台帳などの「対象年月」初期値を決める。
+// 指定された年が実際の今年と一致する場合は、実際の「今月」を返す。
+// （年度セレクタで過去年などを選んでいる場合は、今月という概念が無いため1月を返す。）
+function defaultYmForYear(year) {
+  const now = new Date();
+  if (year === now.getFullYear()) {
+    return year * 100 + (now.getMonth() + 1);
+  }
+  return year * 100 + 1;
+}
+// 賞与の新規登録時の初期日付。対象年度が実際の今年と一致する場合は実際の今日の日付、
+// そうでなければその年の6月10日を仮の初期値とする。
+function defaultBonusDate(year) {
+  const now = new Date();
+  if (year === now.getFullYear()) {
+    const p = n => String(n).padStart(2, "0");
+    return `${year}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+  }
+  return `${year}-06-10`;
 }
 
 </script>
@@ -1145,7 +1242,7 @@ const NAV = [
   ]},
   { group: "参考・管理", items: [
     { id: "taxtables", label: "税額表について" },
-    { id: "backup", label: "データのバックアップ" },
+    { id: "backup", label: "バックアップと復元" },
     { id: "update", label: "アップデートを確認" },
   ]},
 ];
@@ -1158,7 +1255,7 @@ const NAV = [
 // 「アップデートを確認」ページは、この定数（＝今起動しているアプリ自身のバージョン）と
 // version.json（＝サーバー上の最新バージョン）を比較して新着を判定します。
 // ============================================================================
-const APP_VERSION_DATE = "2026-10-06 19:26";
+const APP_VERSION_DATE = "2026-10-07 20:17";
 
 let currentPage = "company";
 // 現在選択中の年度（西暦）。ブートストラップ時にpickDefaultYear()で初期化される。
@@ -1249,6 +1346,7 @@ function renderSidebar() {
     onchange: (e) => {
       Store.switchProfile(Number(e.target.value));
       currentYear = pickDefaultYear();
+      monthlySelectedYm = null; // 切替後は「実際の今月」を自動的に表示し直す
       renderSidebar();
       renderPage();
       flash("会社プロファイルを切り替えました");
@@ -1271,6 +1369,7 @@ function renderSidebar() {
       if (!trimmed) { flash("名前を入力してください", true); return; }
       Store.addProfile(trimmed);
       currentYear = pickDefaultYear();
+      monthlySelectedYm = null;
       renderSidebar();
       renderPage();
       flash(`「${trimmed}」を追加して切り替えました`);
@@ -1297,6 +1396,7 @@ function renderSidebar() {
       if (!confirm(`「${cur ? cur.name : ""}」のデータを削除します。この操作は取り消せません。よろしいですか？`)) return;
       Store.deleteProfile(activeId);
       currentYear = pickDefaultYear();
+      monthlySelectedYm = null;
       renderSidebar();
       renderPage();
       flash("プロファイルを削除しました");
@@ -1368,6 +1468,15 @@ function pageHead(title, desc) {
     el("h2", {}, title),
     el("p", {}, desc),
   ]);
+}
+
+// 印刷物（給与明細・賞与明細・賃金台帳・個人別賃金台帳・源泉徴収票）の右上等に表示する
+// 「印刷日時」の文字列を作る。実際に印刷ボタンが押された/プレビューが組み立てられた
+// その時点の日時を都度生成するため、常に最新の日時が表示される。
+function printTimestampText() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 // 本アプリの税額計算ロジックは、今のところ「令和8年分」の税制のみに対応している。
@@ -1754,9 +1863,10 @@ let monthlySelectedYm = null;
 
 function renderMonthlyPage(main) {
   const data = Store.get();
-  // 対象年度がサイドバーで切り替わっていたら、選択中の年月もその年度の1月にリセットする
+  // 対象年度がサイドバーで切り替わっていたら（アプリ起動時・会社プロファイル切替時を含む）、
+  // 選択中の年月を「実際の今月」（対象年度が今年と違う場合は1月）に初期化し直す。
   if (monthlySelectedYm === null || Math.floor(monthlySelectedYm / 100) !== currentYear) {
-    monthlySelectedYm = currentYear * 100 + 1;
+    monthlySelectedYm = defaultYmForYear(currentYear);
   }
   main.appendChild(pageHead("月次給与",
     "対象年月を選ぶと、登録済みの全従業員分がその場で表示されます。所得税は「課税総支給額（基本給・諸手当・"
@@ -1961,7 +2071,7 @@ function renderBonusPage(main) {
   toolbar.appendChild(el("button", {
     class: "btn", onclick: () => {
       const emp = data.employees[0];
-      data.bonus.push({ id: data.nextBonusId++, empId: emp ? emp.id : 0, date: `${currentYear}-06-10`, amount: 0, sonota: 0 });
+      data.bonus.push({ id: data.nextBonusId++, empId: emp ? emp.id : 0, date: defaultBonusDate(currentYear), amount: 0, sonota: 0 });
       Store.save(); renderPage();
     }
   }, "＋ 賞与を追加"));
@@ -2022,6 +2132,7 @@ function buildPaySlipHtml(emp, ym, row, compact = false) {
         <div>${c.name}<br>${c.addr || ""}</div>
         <div style="text-align:right">対象年月：${ymLabel(ym)}<br>氏名：${emp.name} 様</div>
       </div>
+      <div style="text-align:right; font-size:10.5px; font-weight:normal; color:#555; margin:-6px 0 8px 0;">印刷日時：${printTimestampText()}</div>
       <table>
         <tr><th>基本給</th><td>${yen(row.input.kihonkyu)} 円</td></tr>
         <tr><th>諸手当</th><td>${yen(row.input.shokate)} 円</td></tr>
@@ -2050,7 +2161,7 @@ function renderPayslipPage(main) {
   main.appendChild(pageHead("給与明細", `従業員と対象年月を選んで印刷できます（対象年度：${reiwaLabel(currentYear)}／${currentYear}年）。`));
   const empOptions = data.employees.map(e => [e.id, `${e.id}: ${employeeDisplayName(e)}`]);
   let selEmp = data.employees[0] ? data.employees[0].id : 0;
-  let selYm = currentYear * 100 + 1;
+  let selYm = defaultYmForYear(currentYear);
 
   const card = el("div", { class: "card" });
   const preview = el("div", { id: "slipPreviewWrap" });
@@ -2101,6 +2212,7 @@ function buildBonusSlipHtml(emp, b, row, compact = false) {
         <div>${c.name}<br>${c.addr || ""}</div>
         <div style="text-align:right">支給年月日：${b.date}<br>氏名：${emp.name} 様</div>
       </div>
+      <div style="text-align:right; font-size:10.5px; font-weight:normal; color:#555; margin:-6px 0 8px 0;">印刷日時：${printTimestampText()}</div>
       <table>
         <tr><th>賞与額（総支給額）</th><td>${yen(row.amount)} 円</td></tr>
         <tr><th>健康保険料</th><td>${yen(row.kenpo)} 円</td></tr>
@@ -2128,7 +2240,13 @@ function renderBonusslipPage(main) {
     const emp = findEmployee(b.empId);
     return [b.id, `${b.date}　${emp ? emp.name : "?"}　${yen(b.amount)}円`];
   });
+  // 対象年度が実際の今年と一致する場合、実際の「今月」支給の賞与があればそれを初期選択する
   let selId = yearBonus[0].id;
+  if (currentYear === new Date().getFullYear()) {
+    const curMonth = new Date().getMonth() + 1;
+    const matchToday = yearBonus.find(b => Number(String(b.date).slice(5, 7)) === curMonth);
+    if (matchToday) selId = matchToday.id;
+  }
   const card = el("div", { class: "card" });
   const preview = el("div");
   function refresh() {
@@ -2170,7 +2288,7 @@ function renderLedgerPage(main) {
   main.appendChild(pageHead("賃金台帳", `対象年月を選ぶと、全従業員分をまとめて印刷できます（対象年度：${reiwaLabel(currentYear)}／${currentYear}年）。`));
   const warnL = calcYearWarningNote();
   if (warnL) main.appendChild(warnL);
-  let selYm = currentYear * 100 + 1;
+  let selYm = defaultYmForYear(currentYear);
   const monthOptions = []; for (let m = 1; m <= 12; m++) monthOptions.push([currentYear * 100 + m, `${currentYear}年${m}月`]);
 
   const card = el("div", { class: "card" });
@@ -2200,7 +2318,7 @@ function renderLedgerPage(main) {
       totals.tsukin += r.input.tsukin || 0; totals.tsukinKazei += r.input.tsukinKazei || 0;
     });
     const totalsShahoGokei = totals.kenpo + totals.shien + totals.kaigo + totals.kousei + totals.koyou;
-    return `<h2>賃金台帳（${ymLabel(selYm)}）</h2>
+    return `<h2>賃金台帳（${ymLabel(selYm)}）<span style="float:right; font-size:9px; font-weight:normal;">印刷日時：${printTimestampText()}</span></h2>
       <table><thead><tr><th>氏名</th><th>基本給</th><th>諸手当</th><th>残業手当</th>
       <th>通勤手当<br>(非課税)</th><th>通勤手当<br>(課税)</th><th>課税総支給額</th>
       <th>総支給額</th><th>健保</th><th>支援金</th><th>介護</th><th>厚生年金</th><th>雇用保険</th><th>社会保険料等<br>控除合計</th>
@@ -2341,7 +2459,7 @@ function renderAnnualLedgerPage(main) {
     let bonusDetail = "";
     bonusList.forEach(({ b, r }) => { bonusDetail += bonusRowHtml(b, r); });
 
-    return `<div class="tablewrap"><h3>${employeeDisplayName(emp)}　${year}年分</h3>
+    return `<div class="tablewrap"><h3>${employeeDisplayName(emp)}　${year}年分<span style="float:right; font-size:9px; font-weight:normal;">印刷日時：${printTimestampText()}</span></h3>
       <table class="datatable"><thead><tr><th>区分</th><th>基本給</th><th>諸手当</th><th>残業手当</th>
       <th>通勤手当<br>(非課税)</th><th>通勤手当<br>(課税)</th><th>課税総支給額</th><th>総支給額</th><th>健保</th><th>支援金</th><th>介護</th><th>厚生年金</th>
       <th>雇用保険</th><th>社会保険料等<br>控除合計</th><th>所得税</th><th>住民税</th><th>その他控除</th><th>控除合計</th><th>差引支給額</th></tr></thead>
@@ -2544,6 +2662,7 @@ function buildGensenHtml(emp, year) {
   return `
   <div class="gensen">
     <div class="gensen-title">${year}年分　給与所得の源泉徴収票</div>
+    <div style="text-align:right; font-size:10px; color:#555; margin:-4px 0 6px 0;">印刷日時：${printTimestampText()}</div>
     <table class="gensen-table">
       <tr>
         <td class="lbl" style="width:16%">支払を受ける者<br>住所又は居所</td>
@@ -3022,37 +3141,93 @@ function renderTaxTablesPage(main) {
 // 12. データのバックアップ
 // ============================================================================
 function renderBackupPage(main) {
-  main.appendChild(pageHead("データのバックアップ",
+  const company = Store.get().company;
+  const companyName = (company && company.name) || "会社";
+  main.appendChild(pageHead("バックアップと復元",
     "このアプリのデータはお使いのブラウザ内に保存されています。ブラウザのデータを消去すると失われるため、"
-    + "定期的にファイルへ書き出してバックアップすることをおすすめします。"));
-  const card = el("div", { class: "card" });
-  const toolbar = el("div", { class: "toolbar" });
-  toolbar.append(
-    el("button", { class: "btn", onclick: () => { Store.exportJson(); flash("バックアップファイルを書き出しました"); } }, "⬇ データを書き出す（JSON）"),
-    el("label", { class: "btn secondary" }, [
-      "⬆ バックアップから復元",
-      (() => {
-        const inp = el("input", { type: "file", accept: ".json", style: "display:none" });
-        inp.addEventListener("change", () => {
-          if (!inp.files[0]) return;
-          if (!confirm("現在のデータは上書きされます。復元しますか？")) return;
-          Store.importJson(inp.files[0], (ok) => {
-            if (ok) { flash("データを復元しました"); renderPage(); }
-            else flash("ファイルの読み込みに失敗しました", true);
-          });
-        });
-        return inp;
-      })(),
-    ]),
+    + "定期的にファイルへ書き出してバックアップすることをおすすめします。会社プロファイルを複数お使いの場合は、"
+    + "現在選択中の会社だけのバックアップと、登録中の全社をまとめたバックアップのどちらかを選べます。"));
+
+  // ---- バックアップ（書き出し） ----
+  const backupCard = el("div", { class: "card" });
+  backupCard.appendChild(el("h3", {}, "バックアップ（書き出し）"));
+  const backupToolbar = el("div", { class: "toolbar" });
+  backupToolbar.append(
+    el("button", {
+      class: "btn", onclick: () => {
+        if (!confirm(`現在選択中の${companyName}のバックアップをします`)) return;
+        Store.exportCurrentProfileJson();
+        flash("バックアップファイルを書き出しました");
+      }
+    }, `⬇ 現在の会社（${companyName}）のみバックアップ`),
+    el("button", {
+      class: "btn secondary", onclick: () => {
+        if (!confirm("アプリに登録中の全社を一括バックアップします")) return;
+        Store.exportAllProfilesJson();
+        flash("全社のバックアップファイルを書き出しました");
+      }
+    }, "⬇ 登録中の全社を一括バックアップ"),
+  );
+  backupCard.appendChild(backupToolbar);
+  main.appendChild(backupCard);
+
+  // ---- 復元（読み込み） ----
+  const restoreCard = el("div", { class: "card" });
+  restoreCard.appendChild(el("h3", {}, "復元（読み込み）"));
+  const restoreToolbar = el("div", { class: "toolbar" });
+
+  const currentInput = el("input", { type: "file", accept: ".json", style: "display:none" });
+  currentInput.addEventListener("change", () => {
+    if (!currentInput.files[0]) return;
+    if (!confirm(`現在選択中の${companyName}のデータを復元します。現在のデータは上書きされます。よろしいですか？`)) {
+      currentInput.value = ""; return;
+    }
+    Store.importCurrentProfileJson(currentInput.files[0], (ok, err) => {
+      if (ok) { flash("データを復元しました"); renderSidebar(); renderPage(); }
+      else flash("復元に失敗しました：" + (err ? err.message : "不明なエラー"), true);
+      currentInput.value = "";
+    });
+  });
+  const allInput = el("input", { type: "file", accept: ".json", style: "display:none" });
+  allInput.addEventListener("change", () => {
+    if (!allInput.files[0]) return;
+    if (!confirm("アプリに登録中の全社のデータを一括して復元します。現在登録中の全社のデータはすべて上書きされます。よろしいですか？")) {
+      allInput.value = ""; return;
+    }
+    Store.importAllProfilesJson(allInput.files[0], (ok, err) => {
+      if (ok) {
+        flash("全社のデータを復元しました");
+        currentYear = pickDefaultYear();
+        monthlySelectedYm = null;
+        renderSidebar(); renderPage();
+      } else {
+        flash("復元に失敗しました：" + (err ? err.message : "不明なエラー"), true);
+      }
+      allInput.value = "";
+    });
+  });
+
+  restoreToolbar.append(
+    el("label", { class: "btn secondary" }, [`⬆ 現在の会社（${companyName}）に復元`, currentInput]),
+    el("label", { class: "btn secondary" }, ["⬆ 全社を一括復元", allInput]),
+  );
+  restoreCard.appendChild(restoreToolbar);
+  restoreCard.appendChild(el("div", { class: "note" },
+    "個別バックアップのファイルは「現在の会社に復元」から、全社バックアップのファイルは「全社を一括復元」から読み込んでください。ファイルの種類を間違えた場合はエラーメッセージが表示され、データは上書きされません。"));
+  main.appendChild(restoreCard);
+
+  // ---- 初期化 ----
+  const resetCard = el("div", { class: "card" });
+  resetCard.appendChild(el("h3", {}, "初期化"));
+  resetCard.appendChild(el("div", { class: "toolbar" }, [
     el("button", {
       class: "btn danger", onclick: () => {
-        if (!confirm("すべてのデータを初期状態に戻します。よろしいですか？")) return;
+        if (!confirm(`現在選択中の${companyName}のデータをすべて初期状態に戻します。よろしいですか？`)) return;
         Store.resetToDefault(); flash("初期状態に戻しました"); renderPage();
       }
-    }, "初期状態にリセット"),
-  );
-  card.appendChild(toolbar);
-  main.appendChild(card);
+    }, `現在の会社（${companyName}）を初期状態にリセット`),
+  ]));
+  main.appendChild(resetCard);
 }
 
 // ============================================================================
