@@ -3,32 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
 <title>給与計算・年末調整システム（令和8年分）</title>
 
 <!-- ==== PWA対応 ==== -->
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#173a5e">
+<meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes">
 <!-- iOS Safari用（Androidと表記が異なるため両方指定） -->
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="給与計算">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-
 <script src="https://cdn.jsdelivr.net/pyodide/v0.26.3/full/pyodide.js"></script>
 <style>
   :root{
+    color-scheme:light;
     --navy:#173a5e;
     --navy-dark:#0f2843;
     --accent:#2f6fb3;
     --accent-soft:#e7f0fa;
-    --paper:#fafbfc;
+    --paper:#ffffff;
     --line:#d8dee6;
     --ink:#1c2530;
     --ink-soft:#5b6b7d;
-    --input-bg:#fff8dd;
-    --input-border:#e4c96a;
+    --input-bg:#ffffff;
+    --input-border:#b9c5d3;
     --good:#1e7d4f;
     --warn:#b3401f;
     --radius:6px;
@@ -44,12 +45,13 @@
     min-height:100vh;
     font-size:14px;
   }
-  /* ---------- Sidebar ---------- */
+  /* ---------- Sidebar（白ベース・OSがダークモードでも見やすい配色） ---------- */
   #sidebar{
     width:236px;
     flex:0 0 236px;
-    background:linear-gradient(180deg,var(--navy) 0%,var(--navy-dark) 100%);
-    color:#dce7f2;
+    background:#f7f9fc;
+    color:var(--ink);
+    border-right:1px solid var(--line);
     padding:20px 0;
     position:sticky;
     top:0;
@@ -58,68 +60,73 @@
   }
   #sidebar .brand{
     padding:0 20px 18px 20px;
-    border-bottom:1px solid rgba(255,255,255,.12);
+    border-bottom:1px solid var(--line);
     margin-bottom:10px;
   }
   #sidebar .brand h1{
     font-size:15px;
     line-height:1.5;
     margin:0 0 4px 0;
-    color:#fff;
+    color:var(--navy);
     font-weight:700;
   }
   #sidebar .brand .yr{
     font-size:11px;
-    color:#9db6cf;
+    color:var(--ink-soft);
     letter-spacing:.04em;
   }
   .profilebox{
     padding:0 20px 16px 20px;
-    border-bottom:1px solid rgba(255,255,255,.12);
+    border-bottom:1px solid var(--line);
     margin-bottom:6px;
   }
+  .profilebox .boxlabel{
+    font-size:10.5px; color:var(--ink-soft); letter-spacing:.08em; margin-bottom:6px; font-weight:600;
+  }
   .profileselect{
-    width:100%; padding:7px 8px; border-radius:5px; border:1px solid rgba(255,255,255,.25);
-    background:#0f2843; color:#fff; font-size:12.5px; margin-bottom:6px;
+    width:100%; padding:7px 8px; border-radius:5px; border:1px solid #b9c5d3;
+    background:#fff; color:var(--ink); font-size:12.5px; margin-bottom:6px;
   }
   .profilebtnrow{display:flex; gap:5px;}
   .profilebtn{
-    flex:1; padding:5px 4px; border-radius:4px; border:1px solid rgba(255,255,255,.25);
-    background:transparent; color:#dce7f2; font-size:11px; cursor:pointer;
+    flex:1; padding:5px 4px; border-radius:4px; border:1px solid #b9c5d3;
+    background:#fff; color:var(--accent); font-size:11px; cursor:pointer;
   }
-  .profilebtn:hover{background:rgba(255,255,255,.1);}
-  .profilebtn.danger{border-color:rgba(220,120,100,.5); color:#e3a08f;}
-  .profilebtn.danger:hover{background:rgba(163,64,31,.3);}
+  .profilebtn:hover{background:var(--accent-soft);}
+  .profilebtn.danger{border-color:#e2b3a3; color:var(--warn);}
+  .profilebtn.danger:hover{background:#fdf1ec;}
   .navgroup{margin:14px 0;}
   .navgroup .label{
     font-size:10.5px;
-    color:#7d97b2;
+    color:var(--ink-soft);
     padding:4px 20px;
     letter-spacing:.08em;
     text-transform:uppercase;
+    font-weight:600;
   }
   .navitem{
     display:flex;
     align-items:center;
     gap:10px;
     padding:9px 20px;
-    color:#cfe0ef;
+    color:#2c3e50;
     cursor:pointer;
     border-left:3px solid transparent;
     font-size:13.5px;
     transition:background .12s, color .12s;
   }
-  .navitem:hover{background:rgba(255,255,255,.06); color:#fff;}
+  .navitem:hover{background:#e9f0f8; color:var(--navy);}
   .navitem.active{
-    background:rgba(255,255,255,.10);
-    border-left-color:#5b9bdb;
-    color:#fff;
-    font-weight:600;
+    background:var(--accent-soft);
+    border-left-color:var(--accent);
+    color:var(--navy);
+    font-weight:700;
   }
   .navitem .dot{
     width:6px;height:6px;border-radius:50%;
-    background:#5b9bdb;flex:0 0 auto;opacity:.85;
+    background:var(--accent);flex:0 0 auto;opacity:.7;
   }
+
   /* ---------- Main ---------- */
   #main{flex:1; min-width:0; padding:28px 34px 60px 34px;}
   .pagehead{margin-bottom:18px;}
@@ -155,35 +162,72 @@
   .field.wide{min-width:320px; flex:1;}
   .field label{font-size:11.5px; color:var(--ink-soft); font-weight:600;}
 
-  /* ---------- 1件（従業員1名分）を2行に区切って表示するレコードカード ----------
-     横スクロールが必要な幅広テーブルの代わりに、従業員マスタ・月次給与の入力画面で使う。
-     賃金台帳・印刷（buildLedgerHtml等）は従来どおり1行のテーブル表示のまま変更していない。 */
-  .reclist{display:flex; flex-direction:column; gap:10px; margin-bottom:16px;}
+  /* ---------- 1件（従業員1名分）をまとめて表示するレコードカード ----------
+     従業員マスタ・月次給与の入力画面で使う。カードごとに濃い枠線・影・色付きの見出し帯を付け、
+     1人ごとの区切りをはっきりさせている。賃金台帳・印刷は従来どおり1行のテーブル表示のまま。 */
+  .reclist{display:flex; flex-direction:column; gap:16px; margin-bottom:16px;}
   .recblock{
-    background:#fff; border:1px solid var(--line); border-radius:var(--radius);
-    padding:10px 14px 12px 14px;
+    background:#fff; border:2px solid #7f9bb8; border-radius:8px;
+    box-shadow:0 2px 6px rgba(23,58,94,.16); overflow:hidden;
   }
-  .recblock.retired{background:#fdf6f5; border-color:#f0c7b5;}
-  .recline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 14px;}
+  .recblock.retired{border-color:#d49a88;}
+  .rechead{
+    display:flex; align-items:center; gap:10px; padding:7px 12px;
+    background:#dfeaf6; border-bottom:1px solid #b9c5d3;
+  }
+  .recblock.retired .rechead{background:#fbe7e2; border-bottom-color:#e2b3a3;}
+  .rechead .spacer{flex:1;}
+  .rechead input[type=text]{width:190px; font-weight:700; font-size:14px;}
+  .recid{
+    background:var(--navy); color:#fff; font-size:11px; font-weight:700;
+    padding:2px 9px; border-radius:10px; white-space:nowrap;
+  }
+  .retiretext{color:#a33; font-size:11.5px; font-weight:700; white-space:nowrap;}
+  .recname{font-weight:700; font-size:14.5px; color:var(--navy);}
+  .netbox{display:flex; align-items:center; gap:8px;}
+  .netbox .netlabel{font-size:11px; font-weight:700; color:var(--ink-soft);}
+  .rechead .calcval.net{font-size:15px; min-width:112px; padding:4px 10px;}
+  .recbody{padding:9px 12px 10px 12px;}
+  .recline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px 10px;}
   .recline + .recline{margin-top:8px; padding-top:8px; border-top:1px dashed var(--line);}
+  .reccap{
+    align-self:center; font-size:10.5px; font-weight:700; color:#fff; background:#6f8cab;
+    border-radius:3px; padding:2px 0; width:34px; text-align:center; flex:0 0 auto;
+  }
+  .reccap.ded{background:#b3703f;}
   .recfield{display:flex; flex-direction:column; gap:3px;}
   .recfield label{font-size:10.5px; color:var(--ink-soft); font-weight:600; white-space:nowrap;}
-  .recfield input[type=text],.recfield input[type=number]{padding:5px 7px; font-size:13px;}
+  .recfield input[type=text],.recfield input[type=number]{width:100%; padding:5px 7px; font-size:13px;}
+  .recfield select{padding:4px 3px; font-size:13px;}
+  .recfield .date-input-wrap{min-width:0; width:122px;}
+  .recfield .date-input-wrap .date-display{min-width:0; width:100%; padding-left:6px; padding-right:22px;}
   .recfield .calcval{
     padding:5px 7px; font-size:13px; font-weight:700; color:#2a3b4d;
     background:#f0f2f5; border:1px solid var(--line); border-radius:4px; min-height:15px;
     text-align:right; white-space:nowrap;
   }
-  .recfield .calcval.net{background:var(--navy); color:#fff; border-color:var(--navy);}
-  .recfield.ckbox{flex-direction:row; align-items:center; gap:6px; padding-bottom:4px;}
-  .recfield.ckbox label{white-space:normal; max-width:78px; line-height:1.25;}
-  .recheadrow{display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;}
-  .recname{font-weight:700; font-size:13.5px; color:var(--navy);}
-  .rectotal{background:#173a5e; border-color:#173a5e;}
+  .recfield .calcval.net,.rechead .calcval.net{background:var(--navy); color:#fff; border-color:var(--navy); text-align:right;}
+  .calcval{
+    padding:5px 7px; font-size:13px; font-weight:700; color:#2a3b4d;
+    background:#f0f2f5; border:1px solid var(--line); border-radius:4px; text-align:right; white-space:nowrap;
+  }
+  .recgroup{border:1px solid var(--line); border-radius:5px; padding:3px 8px 6px 8px; background:#f7f9fc;}
+  .recgroup .grouplabel{font-size:10.5px; color:var(--ink-soft); font-weight:700; margin-bottom:3px;}
+  .recgroup .grouprow{display:flex; gap:7px;}
+  .recgroup .recfield select{width:54px;}
+  .reccheck{
+    display:inline-flex; align-items:center; gap:6px; padding:4px 11px 4px 8px;
+    border:1px solid var(--input-border); border-radius:14px; background:#fff;
+    font-size:12.5px; cursor:pointer; white-space:nowrap; user-select:none;
+  }
+  .reccheck:hover{background:#eef4fb;}
+  .reccheck:has(input:checked){background:var(--accent-soft); border-color:var(--accent); font-weight:700; color:var(--navy);}
+  .recchecks{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center;}
+  .rectotal{border-color:var(--navy);}
+  .rectotal .rechead{background:var(--navy); border-bottom-color:var(--navy);}
   .rectotal .recname{color:#fff;}
-  .rectotal .recfield label{color:#bcd0e6;}
-  .rectotal .calcval{background:rgba(255,255,255,.14); color:#fff; border-color:rgba(255,255,255,.3);}
-  .rectotal .calcval.net{background:#fff; color:var(--navy); border-color:#fff;}
+  .rectotal .netbox .netlabel{color:#bcd0e6;}
+  .rectotal .rechead .calcval.net{background:#fff; color:var(--navy); border-color:#fff;}
   input[type=text],input[type=number],input[type=date],select,textarea{
     font-family:inherit;
     font-size:13.5px;
@@ -191,7 +235,7 @@
     border:1px solid var(--input-border);
     border-radius:4px;
     background:var(--input-bg);
-    color:#3a2f0b;
+    color:var(--ink);
   }
   select.readonly-select, input[readonly]{
     background:#f0f2f5; color:#556; border-color:var(--line);
@@ -206,7 +250,7 @@
     width:100%; min-width:150px; box-sizing:border-box; cursor:pointer;
     padding-right:24px;
     text-align:left !important;
-    background:var(--input-bg) !important; color:#3a2f0b !important; border-color:var(--input-border) !important;
+    background:var(--input-bg) !important; color:var(--ink) !important; border-color:var(--input-border) !important;
   }
   .date-input-wrap .date-icon{
     position:absolute; right:6px; top:50%; transform:translateY(-50%);
@@ -1255,7 +1299,7 @@ const NAV = [
 // 「アップデートを確認」ページは、この定数（＝今起動しているアプリ自身のバージョン）と
 // version.json（＝サーバー上の最新バージョン）を比較して新着を判定します。
 // ============================================================================
-const APP_VERSION_DATE = "2026-10-07 20:17";
+const APP_VERSION_DATE = "2026-10-08 11:58";
 
 let currentPage = "company";
 // 現在選択中の年度（西暦）。ブートストラップ時にpickDefaultYear()で初期化される。
@@ -1411,7 +1455,7 @@ function renderSidebar() {
   const availableYears = getAvailableYears();
   if (!availableYears.includes(currentYear)) currentYear = pickDefaultYear();
   const yearBox = el("div", { class: "profilebox" });
-  yearBox.appendChild(el("div", { style: "font-size:10.5px;color:#7d97b2;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;" }, "対象年度"));
+  yearBox.appendChild(el("div", { class: "boxlabel" }, "対象年度"));
   const yearSelect = el("select", {
     class: "profileselect",
     onchange: (e) => { setCurrentYear(Number(e.target.value)); flash(`対象年度を${reiwaLabel(Number(e.target.value))}（${e.target.value}年）分に切り替えました`); }
@@ -1466,7 +1510,7 @@ function renderPage() {
 function pageHead(title, desc) {
   return el("div", { class: "pagehead" }, [
     el("h2", {}, title),
-    el("p", {}, desc),
+    desc ? el("p", {}, desc) : null,
   ]);
 }
 
@@ -1614,19 +1658,30 @@ function field(label, inputEl, wide = false) {
     inputEl,
   ]);
 }
-// 「1件を2行に区切って表示するカード」用の、ラベル付きフィールド。
-// checkbox=trueの場合はチェックボックスとラベルを横並びにするコンパクト表示にする。
+// 「1件をまとめて表示するカード」用の、ラベル付きフィールド。
+// minWidth＝最小幅、flex＝余白を埋めて広がる指定（住所・備考など長い入力欄用）。
 function recField(label, inputEl, opts = {}) {
-  const cls = "recfield" + (opts.checkbox ? " ckbox" : "");
-  const style = opts.minWidth ? `min-width:${opts.minWidth};` : "";
-  if (opts.checkbox) {
-    return el("div", { class: cls, style }, [inputEl, el("label", {}, label)]);
-  }
-  return el("div", { class: cls, style }, [el("label", {}, label), inputEl]);
+  let style = "";
+  if (opts.minWidth) style += `min-width:${opts.minWidth};`;
+  if (opts.flex) style += `flex:${opts.flex};`;
+  return el("div", { class: "recfield", style }, [el("label", {}, label), inputEl]);
 }
 // 計算結果（読み取り専用）を表示するための小さな値表示欄
 function calcVal(text, opts = {}) {
   return el("div", { class: "calcval" + (opts.net ? " net" : "") }, text);
+}
+// 人数などの0〜10を選ぶドロップダウン。既に11以上や小数が保存されている場合も、その値を
+// 選択肢に加えて表示し、データが書き換わったり失われたりしないようにする。
+function countSelect(value, onChange) {
+  const n = Number(value) || 0;
+  const opts = [];
+  for (let i = 0; i <= 10; i++) opts.push([i, String(i)]);
+  if (!(Number.isInteger(n) && n >= 0 && n <= 10)) opts.push([n, String(n)]);
+  return selectField(opts, n, v => onChange(Number(v)));
+}
+// チェックボックスをラベルごと囲んだ「チップ」表示（ラベル部分を押してもON/OFFできる）
+function checkChip(label, checked, onChange) {
+  return el("label", { class: "reccheck" }, [checkboxField(checked, onChange), label]);
 }
 // サイドバーの「対象年度」切り替えに連動して年を決めるため、ページ側では変更させず表示のみ行う。
 function yearDisplayField() {
@@ -1734,11 +1789,7 @@ function renderEmployeesPage(main) {
     const upd = (k, v) => { emp[k] = v; Store.save(); };
     const block = el("div", { class: "recblock" + (emp.retired ? " retired" : "") });
 
-    // ---- 1行目：氏名・基本情報・備考・退職処理 ----
-    const nameField = recField("氏名", textInput(emp.name, v => upd("name", v), { minWidth: "140px" }), { minWidth: "150px" });
-    if (emp.retired) {
-      nameField.appendChild(el("div", { style: "color:#a33; font-size:11px; font-weight:700;" }, retireLabelText(emp)));
-    }
+    // ---- 退職ボタン（処理内容は従来どおり） ----
     let retireBtn;
     if (emp.retired) {
       retireBtn = el("button", {
@@ -1763,33 +1814,48 @@ function renderEmployeesPage(main) {
         }
       }, "退職");
     }
+
+    // ---- 見出し帯：ID・氏名・退職処理 ----
+    const head = el("div", { class: "rechead" }, [
+      el("span", { class: "recid" }, `ID ${emp.id}`),
+      textInput(emp.name, v => upd("name", v)),
+    ]);
+    if (emp.retired) head.appendChild(el("span", { class: "retiretext" }, retireLabelText(emp)));
+    head.append(el("div", { class: "spacer" }), retireBtn);
+
+    // ---- 1段目：基本情報・住民税・扶養等の人数 ----
+    const countField = (label, key) => recField(label, countSelect(emp[key], v => upd(key, v)));
     const line1 = el("div", { class: "recline" }, [
-      recField("ID", el("div", { class: "calcval", style: "background:#fff;border:none;padding:5px 2px;" }, String(emp.id)), { minWidth: "34px" }),
-      nameField,
-      recField("生年月日", dateInput(emp.birth, v => upd("birth", v)), { minWidth: "140px" }),
-      recField("入社日", dateInput(emp.hire, v => upd("hire", v)), { minWidth: "140px" }),
-      recField("住所", textInput(emp.addr || "", v => upd("addr", v), { minWidth: "180px" }), { minWidth: "190px" }),
-      recField("備考", textInput(emp.memo, v => upd("memo", v), { minWidth: "160px" }), { minWidth: "170px" }),
-      recField("退職処理", retireBtn, { minWidth: "78px" }),
+      recField("生年月日", dateInput(emp.birth, v => upd("birth", v))),
+      recField("入社日", dateInput(emp.hire, v => upd("hire", v))),
+      recField("住所", textInput(emp.addr || "", v => upd("addr", v)), { flex: "2 1 160px", minWidth: "140px" }),
+      recField("備考", textInput(emp.memo, v => upd("memo", v)), { flex: "1 1 110px", minWidth: "100px" }),
+      recField("住民税(6月)", moneyInput(emp.juminzeiJune, v => upd("juminzeiJune", v)), { minWidth: "88px" }),
+      recField("住民税(6月以外)", moneyInput(emp.juminzeiOther, v => upd("juminzeiOther", v)), { minWidth: "100px" }),
+      el("div", { class: "recgroup" }, [
+        el("div", { class: "grouplabel" }, "扶養親族等の人数"),
+        el("div", { class: "grouprow" }, [
+          countField("一般", "ippan"),
+          countField("特定", "tokutei"),
+          countField("老人別居", "roujin"),
+          countField("同居老親等", "doukyo"),
+          countField("障害者等加算", "shougai"),
+        ]),
+      ]),
     ]);
 
-    // ---- 2行目：税務・保険まわりの設定 ----
+    // ---- 2段目：チェック項目をすべてここに集約 ----
     const line2 = el("div", { class: "recline" }, [
-      recField("扶養控除等申告書提出", checkboxField(emp.fuyoShinkoku, v => upd("fuyoShinkoku", v)), { checkbox: true }),
-      recField("配偶者(源泉控除対象)", checkboxField(emp.haigusha, v => upd("haigusha", v)), { checkbox: true }),
-      recField("介護保険該当", checkboxField(emp.kaigo, v => upd("kaigo", v)), { checkbox: true }),
-      recField("雇用保険個人適用", checkboxField(emp.koyouKobetsu, v => upd("koyouKobetsu", v)), { checkbox: true }),
-      recField("扶養(一般)", numInput(emp.ippan, v => upd("ippan", v)), { minWidth: "56px" }),
-      recField("扶養(特定)", numInput(emp.tokutei, v => upd("tokutei", v)), { minWidth: "56px" }),
-      recField("扶養(老人別居)", numInput(emp.roujin, v => upd("roujin", v)), { minWidth: "56px" }),
-      recField("同居老親等", numInput(emp.doukyo, v => upd("doukyo", v)), { minWidth: "56px" }),
-      recField("障害者等加算", numInput(emp.shougai, v => upd("shougai", v)), { minWidth: "56px" }),
-      recField("年末調整対象", checkboxField(emp.nenchoTaisho, v => upd("nenchoTaisho", v)), { checkbox: true }),
-      recField("住民税(6月)", moneyInput(emp.juminzeiJune, v => upd("juminzeiJune", v)), { minWidth: "90px" }),
-      recField("住民税(6月以外)", moneyInput(emp.juminzeiOther, v => upd("juminzeiOther", v)), { minWidth: "90px" }),
+      el("div", { class: "recchecks" }, [
+        checkChip("扶養控除等申告書提出", emp.fuyoShinkoku, v => upd("fuyoShinkoku", v)),
+        checkChip("配偶者(源泉控除対象)", emp.haigusha, v => upd("haigusha", v)),
+        checkChip("介護保険該当", emp.kaigo, v => upd("kaigo", v)),
+        checkChip("雇用保険個人適用", emp.koyouKobetsu, v => upd("koyouKobetsu", v)),
+        checkChip("年末調整対象", emp.nenchoTaisho, v => upd("nenchoTaisho", v)),
+      ]),
     ]);
 
-    block.append(line1, line2);
+    block.append(head, el("div", { class: "recbody" }, [line1, line2]));
     list.appendChild(block);
   });
   main.appendChild(list);
@@ -1868,12 +1934,7 @@ function renderMonthlyPage(main) {
   if (monthlySelectedYm === null || Math.floor(monthlySelectedYm / 100) !== currentYear) {
     monthlySelectedYm = defaultYmForYear(currentYear);
   }
-  main.appendChild(pageHead("月次給与",
-    "対象年月を選ぶと、登録済みの全従業員分がその場で表示されます。所得税は「課税総支給額（基本給・諸手当・"
-    + "残業手当・通勤手当の課税分の合計）」から社会保険料等を差し引いた金額をもとに、国税庁「電算機計算の特例」"
-    + "（甲欄・乙欄）にそのまま基づいて自動計算されます。「前月支給額の複写」ボタンを押すと、基本給・"
-    + "諸手当・残業手当・通勤手当（非課税・課税とも）に前月と同じ金額を複写できます（自動では複写されないので、"
-    + "金額が変わる月はそのまま入力し、変わらない月だけ複写ボタンをご利用ください）。"));
+  main.appendChild(pageHead("月次給与", ""));
   const warn = calcYearWarningNote();
   if (warn) main.appendChild(warn);
 
@@ -1983,40 +2044,40 @@ function renderMonthlyPage(main) {
     ref.td.koujoKei = calcVal(yen(row.koujoKei));
     ref.td.sashihiki = calcVal(yen(row.sashihiki), { net: true });
 
-    const block = el("div", { class: "recblock" + (row.isOtsu ? "" : "") });
-    // ---- 1行目：支給項目 ----
+    const block = el("div", { class: "recblock" });
+    const head = el("div", { class: "rechead" }, [
+      el("span", { class: "recname" }, emp.name),
+      el("span", { class: "pill " + (row.isOtsu ? "otsu" : "kou") }, row.isOtsu ? "乙欄" : "甲欄"),
+      el("div", { class: "spacer" }),
+      el("div", { class: "netbox" }, [el("span", { class: "netlabel" }, "差引支給額"), ref.td.sashihiki]),
+    ]);
+    // ---- 1段目：支給項目 ----
     const line1 = el("div", { class: "recline" }, [
-      el("div", { class: "recfield", style: "min-width:130px;" }, [
-        el("label", {}, "氏名／区分"),
-        el("div", { style: "display:flex; align-items:center; gap:6px;" }, [
-          el("span", { class: "recname" }, emp.name),
-          el("span", { class: "pill " + (row.isOtsu ? "otsu" : "kou") }, row.isOtsu ? "乙欄" : "甲欄"),
-        ]),
-      ]),
-      recField("基本給", moneyInput(input.kihonkyu, v => saveField("kihonkyu", v)), { minWidth: "100px" }),
-      recField("諸手当", moneyInput(input.shokate, v => saveField("shokate", v)), { minWidth: "100px" }),
-      recField("残業手当", moneyInput(input.zangyo, v => saveField("zangyo", v)), { minWidth: "100px" }),
-      recField("通勤手当(非課税)", moneyInput(input.tsukin, v => saveField("tsukin", v)), { minWidth: "110px" }),
-      recField("通勤手当(課税)", moneyInput(input.tsukinKazei, v => saveField("tsukinKazei", v)), { minWidth: "100px" }),
-      recField("課税総支給額", ref.td.kazeiSoshikyu, { minWidth: "100px" }),
-      recField("総支給額", ref.td.souShikyu, { minWidth: "100px" }),
+      el("span", { class: "reccap" }, "支給"),
+      recField("基本給", moneyInput(input.kihonkyu, v => saveField("kihonkyu", v)), { minWidth: "84px" }),
+      recField("諸手当", moneyInput(input.shokate, v => saveField("shokate", v)), { minWidth: "84px" }),
+      recField("残業手当", moneyInput(input.zangyo, v => saveField("zangyo", v)), { minWidth: "84px" }),
+      recField("通勤手当(非課税)", moneyInput(input.tsukin, v => saveField("tsukin", v)), { minWidth: "96px" }),
+      recField("通勤手当(課税)", moneyInput(input.tsukinKazei, v => saveField("tsukinKazei", v)), { minWidth: "90px" }),
+      recField("課税総支給額", ref.td.kazeiSoshikyu, { minWidth: "92px" }),
+      recField("総支給額", ref.td.souShikyu, { minWidth: "88px" }),
     ]);
-    // ---- 2行目：控除項目 ----
+    // ---- 2段目：控除項目 ----
     const line2 = el("div", { class: "recline" }, [
-      recField("健保", ref.td.kenpo, { minWidth: "76px" }),
-      recField("支援金", ref.td.shien, { minWidth: "76px" }),
-      recField("介護", ref.td.kaigo, { minWidth: "76px" }),
-      recField("厚生年金", ref.td.kousei, { minWidth: "82px" }),
-      recField("雇用保険", ref.td.koyou, { minWidth: "76px" }),
-      recField("社保等控除合計", ref.td.shahoKei, { minWidth: "100px" }),
-      recField("社保控除後(A)", ref.td.A, { minWidth: "92px" }),
-      recField("所得税", ref.td.tax, { minWidth: "82px" }),
-      recField("住民税", ref.td.juminzei, { minWidth: "82px" }),
-      recField("その他控除", moneyInput(input.sonota, v => saveField("sonota", v)), { minWidth: "90px" }),
-      recField("控除合計", ref.td.koujoKei, { minWidth: "92px" }),
-      recField("差引支給額", ref.td.sashihiki, { minWidth: "100px" }),
+      el("span", { class: "reccap ded" }, "控除"),
+      recField("健保", ref.td.kenpo, { minWidth: "72px" }),
+      recField("支援金", ref.td.shien, { minWidth: "72px" }),
+      recField("介護", ref.td.kaigo, { minWidth: "72px" }),
+      recField("厚生年金", ref.td.kousei, { minWidth: "78px" }),
+      recField("雇用保険", ref.td.koyou, { minWidth: "72px" }),
+      recField("社保等控除合計", ref.td.shahoKei, { minWidth: "88px" }),
+      recField("社保控除後(A)", ref.td.A, { minWidth: "88px" }),
+      recField("所得税", ref.td.tax, { minWidth: "72px" }),
+      recField("住民税", ref.td.juminzei, { minWidth: "72px" }),
+      recField("その他控除", moneyInput(input.sonota, v => saveField("sonota", v)), { minWidth: "84px" }),
+      recField("控除合計", ref.td.koujoKei, { minWidth: "84px" }),
     ]);
-    block.append(line1, line2);
+    block.append(head, el("div", { class: "recbody" }, [line1, line2]));
     list.appendChild(block);
     rowRefs.push(ref);
   });
@@ -2029,28 +2090,30 @@ function renderMonthlyPage(main) {
       tax: calcVal(""), juminzei: calcVal(""), sonota: calcVal(""), koujoKei: calcVal(""), sashihiki: calcVal("", { net: true }),
     };
     const totalBlock = el("div", { class: "recblock rectotal" });
+    const thead = el("div", { class: "rechead" }, [
+      el("span", { class: "recname" }, "合計"),
+      el("div", { class: "spacer" }),
+      el("div", { class: "netbox" }, [el("span", { class: "netlabel" }, "差引支給額"), totalsTd.sashihiki]),
+    ]);
     const tline1 = el("div", { class: "recline" }, [
-      el("div", { class: "recfield", style: "min-width:130px;" }, [
-        el("label", {}, "　"),
-        el("span", { class: "recname" }, "合計"),
-      ]),
+      el("span", { class: "reccap" }, "支給"),
       recField("課税総支給額", totalsTd.kazeiSoshikyu, { minWidth: "100px" }),
       recField("総支給額", totalsTd.souShikyu, { minWidth: "100px" }),
     ]);
     const tline2 = el("div", { class: "recline" }, [
+      el("span", { class: "reccap ded" }, "控除"),
       recField("健保", totalsTd.kenpo, { minWidth: "76px" }),
       recField("支援金", totalsTd.shien, { minWidth: "76px" }),
       recField("介護", totalsTd.kaigo, { minWidth: "76px" }),
       recField("厚生年金", totalsTd.kousei, { minWidth: "82px" }),
       recField("雇用保険", totalsTd.koyou, { minWidth: "76px" }),
-      recField("社保等控除合計", totalsTd.shahoKei, { minWidth: "100px" }),
-      recField("所得税", totalsTd.tax, { minWidth: "82px" }),
-      recField("住民税", totalsTd.juminzei, { minWidth: "82px" }),
-      recField("その他控除", totalsTd.sonota, { minWidth: "90px" }),
-      recField("控除合計", totalsTd.koujoKei, { minWidth: "92px" }),
-      recField("差引支給額", totalsTd.sashihiki, { minWidth: "100px" }),
+      recField("社保等控除合計", totalsTd.shahoKei, { minWidth: "92px" }),
+      recField("所得税", totalsTd.tax, { minWidth: "80px" }),
+      recField("住民税", totalsTd.juminzei, { minWidth: "80px" }),
+      recField("その他控除", totalsTd.sonota, { minWidth: "84px" }),
+      recField("控除合計", totalsTd.koujoKei, { minWidth: "88px" }),
     ]);
-    totalBlock.append(tline1, tline2);
+    totalBlock.append(thead, el("div", { class: "recbody" }, [tline1, tline2]));
     list.appendChild(totalBlock);
     updateTotalsRow();
   }
