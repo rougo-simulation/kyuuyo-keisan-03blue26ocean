@@ -1112,13 +1112,18 @@ function computeMonthlyRow(empId, yyyymm) {
   const souShikyu = kazeiSoshikyu + (input.tsukin || 0);
 
   const hyojun = getHyojunHoshu(empId, yyyymm);
-  const kenpo = hyojun.kenpoGaku * company.kenpoRate / 2;
-  const kaigo = emp.kaigo ? hyojun.kenpoGaku * company.kaigoRate / 2 : 0;
-  const kousei = hyojun.kouseiGaku * company.kouseiRate / 2;
+  // 各保険料は1円未満を四捨五入して「円」単位に確定させてから合計する。
+  // （従来は端数のまま合計していたため、画面に表示される各項目の合計と
+  //   「社保等控除合計」が1円ずれることがあった。）
+  // 浮動小数点の誤差でちょうど50銭が切り捨てにならないよう、微小値を足して丸める。
+  const round1 = (x) => Math.round(x + 1e-9);
+  const kenpo = round1(hyojun.kenpoGaku * company.kenpoRate / 2);
+  const kaigo = emp.kaigo ? round1(hyojun.kenpoGaku * company.kaigoRate / 2) : 0;
+  const kousei = round1(hyojun.kouseiGaku * company.kouseiRate / 2);
   const koyouApplies = company.koyouFlag && emp.koyouKobetsu;
-  const koyou = koyouApplies ? souShikyu * company.koyouEmpRate : 0;
+  const koyou = koyouApplies ? round1(souShikyu * company.koyouEmpRate) : 0;
   const shienApplies = yyyymm >= company.shienStart;
-  const shien = shienApplies ? hyojun.kenpoGaku * company.shienRate / 2 : 0;
+  const shien = shienApplies ? round1(hyojun.kenpoGaku * company.shienRate / 2) : 0;
   const shahoKei = kenpo + kaigo + kousei + koyou + shien;
 
   // 所得税の計算は「課税総支給額」から社会保険料等を差し引いた金額（A）を用いる
@@ -1299,7 +1304,7 @@ const NAV = [
 // 「アップデートを確認」ページは、この定数（＝今起動しているアプリ自身のバージョン）と
 // version.json（＝サーバー上の最新バージョン）を比較して新着を判定します。
 // ============================================================================
-const APP_VERSION_DATE = "2026-10-08 11:58";
+const APP_VERSION_DATE = "2026-11-02 14:34";
 
 let currentPage = "company";
 // 現在選択中の年度（西暦）。ブートストラップ時にpickDefaultYear()で初期化される。
