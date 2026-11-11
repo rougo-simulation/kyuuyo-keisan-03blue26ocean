@@ -388,6 +388,11 @@
     body.printing-ledger #ledgerPrintArea{display:block; position:absolute; left:0; top:0; width:100%;}
     #printSlipBulk, #printSlipBulk *{visibility:visible;}
     body.printing-bulk-slip #printSlipBulk{display:block; position:absolute; left:0; top:0; width:100%;}
+    /* 台帳系の印刷（賃金台帳・個人別賃金台帳・源泉徴収票）中は、画面側（サイドバー・本体）を完全に外す。
+       visibility:hiddenのままだと見えないだけで場所を取り続けるため、背の高い画面
+       （個人別賃金台帳など）の印刷時に空白ページが付いてしまう。
+       ※給与明細・賞与明細の印刷は従来の挙動のまま変えていない。 */
+    body.printing-ledger #sidebar, body.printing-ledger #main{display:none;}
     @page{ size:A4; margin:10mm; }
   }
   #dynamicPageStyle{}
@@ -429,10 +434,20 @@
   #ledgerPrintArea table:not(.datatable) th:first-child, #ledgerPrintArea table:not(.datatable) td:first-child{
     width:82px; white-space:nowrap; word-break:keep-all; overflow-wrap:normal;
   }
-  /* 個人別賃金台帳（区分列）：【上期小計】のような長いラベルは折り返す。金額列は対象外なので数字は改行されない */
+  /* 個人別賃金台帳（datatable）の印刷：A4横1ページに右端まで収める。
+     ・画面用の「スクロール枠」（高さ制限・overflow）を印刷では無効化する（合計行・右端が切れる原因）
+     ・見出し/合計行の文字サイズを画面用のまま（11.5px/13.5px）にせず、印刷用に小さく揃える
+     ・区分列は折り返さず1行で表示し、その分だけ幅を確保する（残りの金額列は均等割り） */
+  #ledgerPrintArea .tablewrap{overflow:visible; max-height:none; border:none; border-radius:0; box-sizing:border-box;}
+  #ledgerPrintArea table.datatable{width:100%; table-layout:fixed; font-size:8.5px;}
+  #ledgerPrintArea table.datatable th{position:static; font-size:8px; padding:2px 1px; text-align:center; white-space:nowrap;}
+  #ledgerPrintArea table.datatable td{font-size:8.5px; padding:2px 3px; border-bottom:1px solid #888;}
   #ledgerPrintArea table.datatable th:first-child, #ledgerPrintArea table.datatable td:first-child{
-    white-space:normal; overflow-wrap:break-word; word-break:break-all;
+    width:112px; white-space:nowrap; word-break:keep-all; overflow-wrap:normal; text-align:left;
   }
+  #ledgerPrintArea table.datatable tr{page-break-inside:avoid;}
+  #ledgerPrintArea table.datatable .row-total td,
+  #ledgerPrintArea table.datatable .row-total.grand-total td{font-size:8.5px; padding:2px 3px;}
   #ledgerPrintArea th{background:#eef3f9; line-height:1.25; color:#000; font-weight:700;}
   #ledgerPrintArea td{text-align:right;}
   #ledgerPrintArea td:first-child, #ledgerPrintArea th:first-child{text-align:left;}
@@ -1316,7 +1331,7 @@ const NAV = [
 // 「アップデートを確認」ページは、この定数（＝今起動しているアプリ自身のバージョン）と
 // version.json（＝サーバー上の最新バージョン）を比較して新着を判定します。
 // ============================================================================
-const APP_VERSION_DATE = "2026-11-11 09:22";
+const APP_VERSION_DATE = "2026-11-11 14:23";
 
 let currentPage = "company";
 // 現在選択中の年度（西暦）。ブートストラップ時にpickDefaultYear()で初期化される。
@@ -2574,7 +2589,7 @@ function renderAnnualLedgerPage(main) {
 
     return `<div class="tablewrap"><h3>${employeeDisplayName(emp)}　${year}年分<span style="float:right; font-size:9px; font-weight:normal;">印刷日時：${printTimestampText()}</span></h3>
       <table class="datatable"><thead><tr><th>区分</th><th>基本給</th><th>諸手当</th><th>残業手当</th>
-      <th>通勤手当<br>(非課税)</th><th>通勤手当<br>(課税)</th><th>課税総支給額</th><th>総支給額</th><th>健保</th><th>支援金</th><th>介護</th><th>厚生年金</th>
+      <th>通勤手当<br>(非課税)</th><th>通勤手当<br>(課税)</th><th>課税総<br>支給額</th><th>総支給額</th><th>健保</th><th>支援金</th><th>介護</th><th>厚生年金</th>
       <th>雇用保険</th><th>社会保険料等<br>控除合計</th><th>所得税</th><th>住民税</th><th>その他控除</th><th>控除合計</th><th>差引支給額</th></tr></thead>
       <tbody>
       ${monthly}
