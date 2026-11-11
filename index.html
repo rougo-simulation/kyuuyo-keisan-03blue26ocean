@@ -223,6 +223,9 @@
   .reccheck:hover{background:#eef4fb;}
   .reccheck:has(input:checked){background:var(--accent-soft); border-color:var(--accent); font-weight:700; color:var(--navy);}
   .recchecks{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center;}
+  .recblock.manual{border-color:#d08a3a;}
+  .recblock.manual .rechead{background:#fdf0dc; border-bottom-color:#e8c48f;}
+  .manualbadge{background:#d08a3a; color:#fff; font-size:11px; font-weight:700; padding:2px 9px; border-radius:10px; white-space:nowrap;}
   .rectotal{border-color:var(--navy);}
   .rectotal .rechead{background:var(--navy); border-bottom-color:var(--navy);}
   .rectotal .recname{color:#fff;}
@@ -1117,13 +1120,20 @@ function computeMonthlyRow(empId, yyyymm) {
   //   「社保等控除合計」が1円ずれることがあった。）
   // 浮動小数点の誤差でちょうど50銭が切り捨てにならないよう、微小値を足して丸める。
   const round1 = (x) => Math.round(x + 1e-9);
-  const kenpo = round1(hyojun.kenpoGaku * company.kenpoRate / 2);
-  const kaigo = emp.kaigo ? round1(hyojun.kenpoGaku * company.kaigoRate / 2) : 0;
-  const kousei = round1(hyojun.kouseiGaku * company.kouseiRate / 2);
+  // 「控除額修正」で手入力された控除額（input.dedManual が true の月のみ）は、自動計算より優先する。
+  // 本システム導入前の給与を遡って入力する場合など、実際に徴収した額を反映するための機能。
+  const manualDed = (input.dedManual && input.ded) ? input.ded : null;
+  const pickDed = (key, autoValue) => {
+    if (manualDed && manualDed[key] !== undefined && manualDed[key] !== null) return Number(manualDed[key]) || 0;
+    return autoValue;
+  };
+  const kenpo = pickDed("kenpo", round1(hyojun.kenpoGaku * company.kenpoRate / 2));
+  const kaigo = pickDed("kaigo", emp.kaigo ? round1(hyojun.kenpoGaku * company.kaigoRate / 2) : 0);
+  const kousei = pickDed("kousei", round1(hyojun.kouseiGaku * company.kouseiRate / 2));
   const koyouApplies = company.koyouFlag && emp.koyouKobetsu;
-  const koyou = koyouApplies ? round1(souShikyu * company.koyouEmpRate) : 0;
+  const koyou = pickDed("koyou", koyouApplies ? round1(souShikyu * company.koyouEmpRate) : 0);
   const shienApplies = yyyymm >= company.shienStart;
-  const shien = shienApplies ? round1(hyojun.kenpoGaku * company.shienRate / 2) : 0;
+  const shien = pickDed("shien", shienApplies ? round1(hyojun.kenpoGaku * company.shienRate / 2) : 0);
   const shahoKei = kenpo + kaigo + kousei + koyou + shien;
 
   // 所得税の計算は「課税総支給額」から社会保険料等を差し引いた金額（A）を用いる
@@ -1137,9 +1147,10 @@ function computeMonthlyRow(empId, yyyymm) {
     taxDetail = Calc.kouranMonthlyTax(Math.max(0, A), emp.haigusha, dependentsCount(emp));
     tax = taxDetail.tax;
   }
+  tax = pickDed("tax", tax);
 
   const month = yyyymm % 100;
-  const juminzei = month === 6 ? (emp.juminzeiJune || 0) : (emp.juminzeiOther || 0);
+  const juminzei = pickDed("juminzei", month === 6 ? (emp.juminzeiJune || 0) : (emp.juminzeiOther || 0));
   const sonota = input.sonota || 0;
   const koujoKei = shahoKei + tax + juminzei + sonota;
   const sashihiki = souShikyu - koujoKei;
@@ -1147,7 +1158,8 @@ function computeMonthlyRow(empId, yyyymm) {
   return {
     empty: false, emp, input, kazeiSoshikyu, kazeiKyuyoKei, souShikyu,
     hyojun, kenpo, kaigo, kousei, koyou, shien, shahoKei, A,
-    isOtsu, taxDetail, tax, juminzei, sonota, koujoKei, sashihiki
+    isOtsu, taxDetail, tax, juminzei, sonota, koujoKei, sashihiki,
+    isManualDed: !!manualDed
   };
 }
 
@@ -1304,7 +1316,7 @@ const NAV = [
 // 「アップデートを確認」ページは、この定数（＝今起動しているアプリ自身のバージョン）と
 // version.json（＝サーバー上の最新バージョン）を比較して新着を判定します。
 // ============================================================================
-const APP_VERSION_DATE = "2026-11-02 14:34";
+const APP_VERSION_DATE = "2026-11-11 09:22";
 
 let currentPage = "company";
 // 現在選択中の年度（西暦）。ブートストラップ時にpickDefaultYear()で初期化される。
@@ -2049,10 +2061,43 @@ function renderMonthlyPage(main) {
     ref.td.koujoKei = calcVal(yen(row.koujoKei));
     ref.td.sashihiki = calcVal(yen(row.sashihiki), { net: true });
 
-    const block = el("div", { class: "recblock" });
+    // ---- 控除額修正（手入力）モード ----
+    // 7項目（健保・支援金・介護・厚生年金・雇用保険・所得税・住民税）を、自動計算ではなく
+    // 実際に徴収した金額で手入力できる。ONにした時点の自動計算値を初期値としてコピーする。
+    const manual = !!row.isManualDed;
+    const saveDed = (k, v) => {
+      const cur = (Store.get().monthly[monthKey(emp.id, monthlySelectedYm)] || {}).ded || {};
+      saveField("ded", Object.assign({}, cur, { [k]: v }));
+    };
+    const toggleManual = () => {
+      const ymText = ymLabel(monthlySelectedYm);
+      if (!manual) {
+        const r = computeMonthlyRow(emp.id, monthlySelectedYm);
+        saveMonthlyInput(emp.id, monthlySelectedYm, {
+          dedManual: true,
+          ded: { kenpo: r.kenpo, shien: r.shien, kaigo: r.kaigo, kousei: r.kousei, koyou: r.koyou, tax: r.tax, juminzei: r.juminzei },
+        });
+      } else {
+        if (!confirm(`${emp.name} の${ymText}分の手入力した控除額を破棄して、自動計算に戻します。よろしいですか？`)) return;
+        saveMonthlyInput(emp.id, monthlySelectedYm, { dedManual: false, ded: null });
+      }
+      renderPage();
+    };
+    const dedField = (label, key, minW) => {
+      if (!manual) return recField(label, ref.td[key], { minWidth: minW });
+      ref.td[key] = {}; // 手入力中は自動計算の表示欄を持たない（再計算時の書き込み先を無害なダミーにする）
+      return recField(label, moneyInput(row[key], v => saveDed(key, v)), { minWidth: minW });
+    };
+
+    const block = el("div", { class: "recblock" + (manual ? " manual" : "") });
     const head = el("div", { class: "rechead" }, [
       el("span", { class: "recname" }, emp.name),
       el("span", { class: "pill " + (row.isOtsu ? "otsu" : "kou") }, row.isOtsu ? "乙欄" : "甲欄"),
+      manual ? el("span", { class: "manualbadge" }, "控除額 手入力中") : null,
+      el("button", {
+        class: "btn small " + (manual ? "danger" : "secondary"), onclick: toggleManual,
+        title: manual ? "手入力をやめて自動計算に戻します" : "健保・支援金・介護・厚生年金・雇用保険・所得税・住民税を手入力できるようにします",
+      }, manual ? "自動計算に戻す" : "控除額修正"),
       el("div", { class: "spacer" }),
       el("div", { class: "netbox" }, [el("span", { class: "netlabel" }, "差引支給額"), ref.td.sashihiki]),
     ]);
@@ -2070,15 +2115,15 @@ function renderMonthlyPage(main) {
     // ---- 2段目：控除項目 ----
     const line2 = el("div", { class: "recline" }, [
       el("span", { class: "reccap ded" }, "控除"),
-      recField("健保", ref.td.kenpo, { minWidth: "72px" }),
-      recField("支援金", ref.td.shien, { minWidth: "72px" }),
-      recField("介護", ref.td.kaigo, { minWidth: "72px" }),
-      recField("厚生年金", ref.td.kousei, { minWidth: "78px" }),
-      recField("雇用保険", ref.td.koyou, { minWidth: "72px" }),
+      dedField("健保", "kenpo", "72px"),
+      dedField("支援金", "shien", "72px"),
+      dedField("介護", "kaigo", "72px"),
+      dedField("厚生年金", "kousei", "78px"),
+      dedField("雇用保険", "koyou", "72px"),
       recField("社保等控除合計", ref.td.shahoKei, { minWidth: "88px" }),
       recField("社保控除後(A)", ref.td.A, { minWidth: "88px" }),
-      recField("所得税", ref.td.tax, { minWidth: "72px" }),
-      recField("住民税", ref.td.juminzei, { minWidth: "72px" }),
+      dedField("所得税", "tax", "72px"),
+      dedField("住民税", "juminzei", "72px"),
       recField("その他控除", moneyInput(input.sonota, v => saveField("sonota", v)), { minWidth: "84px" }),
       recField("控除合計", ref.td.koujoKei, { minWidth: "84px" }),
     ]);
