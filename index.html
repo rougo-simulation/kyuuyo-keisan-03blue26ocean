@@ -446,6 +446,19 @@
     width:112px; white-space:nowrap; word-break:keep-all; overflow-wrap:normal; text-align:left;
   }
   #ledgerPrintArea table.datatable tr{page-break-inside:avoid;}
+
+  /* 賃金台帳（月次・全員）の印刷：個人別賃金台帳と同じ文字サイズに揃え、見出し・氏名・桁の大きい金額が
+     隣の列にはみ出さないようにする。従業員が多くて複数ページになる場合も、行の途中で切れず、見出しを各ページに繰り返す。 */
+  #ledgerPrintArea table.ledgertbl{width:100%; table-layout:fixed; font-size:8.5px;}
+  #ledgerPrintArea table.ledgertbl thead{display:table-header-group;}
+  #ledgerPrintArea table.ledgertbl tr{page-break-inside:avoid;}
+  #ledgerPrintArea table.ledgertbl th{font-size:8px; padding:2px 1px; text-align:center; white-space:nowrap;}
+  #ledgerPrintArea table.ledgertbl td{font-size:8.5px; padding:2px 3px;}
+  #ledgerPrintArea table.ledgertbl th:first-child{width:112px; white-space:nowrap; text-align:left; padding-left:3px;}
+  /* 氏名は長い場合のみ折り返す（隣の列にかぶらないように） */
+  #ledgerPrintArea table.ledgertbl td:first-child{
+    width:112px; white-space:normal; word-break:break-all; overflow-wrap:break-word; text-align:left; line-height:1.25;
+  }
   #ledgerPrintArea table.datatable .row-total td,
   #ledgerPrintArea table.datatable .row-total.grand-total td{font-size:8.5px; padding:2px 3px;}
   #ledgerPrintArea th{background:#eef3f9; line-height:1.25; color:#000; font-weight:700;}
@@ -1331,7 +1344,7 @@ const NAV = [
 // 「アップデートを確認」ページは、この定数（＝今起動しているアプリ自身のバージョン）と
 // version.json（＝サーバー上の最新バージョン）を比較して新着を判定します。
 // ============================================================================
-const APP_VERSION_DATE = "2026-11-11 14:23";
+const APP_VERSION_DATE = "2026-11-12 09:19";
 
 let currentPage = "company";
 // 現在選択中の年度（西暦）。ブートストラップ時にpickDefaultYear()で初期化される。
@@ -2447,8 +2460,8 @@ function renderLedgerPage(main) {
     });
     const totalsShahoGokei = totals.kenpo + totals.shien + totals.kaigo + totals.kousei + totals.koyou;
     return `<h2>賃金台帳（${ymLabel(selYm)}）<span style="float:right; font-size:9px; font-weight:normal;">印刷日時：${printTimestampText()}</span></h2>
-      <table><thead><tr><th>氏名</th><th>基本給</th><th>諸手当</th><th>残業手当</th>
-      <th>通勤手当<br>(非課税)</th><th>通勤手当<br>(課税)</th><th>課税総支給額</th>
+      <table class="ledgertbl"><thead><tr><th>氏名</th><th>基本給</th><th>諸手当</th><th>残業手当</th>
+      <th>通勤手当<br>(非課税)</th><th>通勤手当<br>(課税)</th><th>課税総<br>支給額</th>
       <th>総支給額</th><th>健保</th><th>支援金</th><th>介護</th><th>厚生年金</th><th>雇用保険</th><th>社会保険料等<br>控除合計</th>
       <th>所得税</th><th>住民税</th><th>その他控除</th><th>控除合計</th><th>差引支給額</th></tr></thead>
       <tbody>${rows}
